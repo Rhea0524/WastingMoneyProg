@@ -2,19 +2,28 @@ package com.fake.wastingmoney
 
 import android.app.DatePickerDialog
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.provider.MediaStore
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.Button
 import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import com.fake.wastingmoney.model.Expense
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.storage.FirebaseStorage
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -30,13 +39,63 @@ class AddExpense : AppCompatActivity() {
     private val calendar = Calendar.getInstance()
     private val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
     private var selectedDocumentUri: Uri? = null
+    private var tempCameraFile: File? = null
+
+    companion object {
+        private const val STORAGE_PERMISSION_CODE = 1001
+        private const val CAMERA_PERMISSION_CODE = 1002
+    }
 
     // Document picker launcher
     private val documentPickerLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
-            selectedDocumentUri = uri
-            btnUploadDocument.text = "Document Selected ✓"
-            Toast.makeText(this, "Document selected successfully", Toast.LENGTH_SHORT).show()
+            // Copy the file to internal storage to ensure we have persistent access
+            copyFileToInternalStorage(uri) { internalUri ->
+                if (internalUri != null) {
+                    selectedDocumentUri = internalUri
+                    btnUploadDocument.text = "Document Selected ✓"
+                    btnUploadDocument.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_light))
+                    Toast.makeText(this, "Document selected successfully", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "Failed to process selected document", Toast.LENGTH_SHORT).show()
+                }
+            }
+        } else {
+            Toast.makeText(this, "No document selected", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Image picker launcher
+    private val imagePickerLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            // Copy the file to internal storage to ensure we have persistent access
+            copyFileToInternalStorage(uri) { internalUri ->
+                if (internalUri != null) {
+                    selectedDocumentUri = internalUri
+                    btnUploadDocument.text = "Image Selected ✓"
+                    btnUploadDocument.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_light))
+                    Toast.makeText(this, "Image selected successfully", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "Failed to process selected image", Toast.LENGTH_SHORT).show()
+                }
+            }
+        } else {
+            Toast.makeText(this, "No image selected", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Camera launcher
+    private val cameraLauncher = registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success && tempCameraFile != null && tempCameraFile!!.exists()) {
+            selectedDocumentUri = Uri.fromFile(tempCameraFile)
+            btnUploadDocument.text = "Photo Taken ✓"
+            btnUploadDocument.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_light))
+            Toast.makeText(this, "Photo captured successfully", Toast.LENGTH_SHORT).show()
+        } else {
+            selectedDocumentUri = null
+            tempCameraFile?.delete()
+            tempCameraFile = null
+            Toast.makeText(this, "Failed to capture photo", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -74,10 +133,193 @@ class AddExpense : AppCompatActivity() {
         }
 
         btnUploadDocument.setOnClickListener {
+            showUploadOptions()
+        }
+    }
+
+    private fun showUploadOptions() {
+        val options = arrayOf("Take Photo", "Choose from Gallery", "Select Document")
+
+        AlertDialog.Builder(this)
+            .setTitle("Select Option")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> takePhoto()
+                    1 -> selectImage()
+                    2 -> selectDocument()
+                }
+            }
+            .show()
+    }
+
+    private fun takePhoto() {
+        if (checkCameraPermission()) {
             try {
-                documentPickerLauncher.launch("*/*")
+                // Create a file in internal storage for the photo
+                tempCameraFile = createInternalCameraFile()
+                val photoUri = FileProvider.getUriForFile(
+                    this,
+                    "${packageName}.fileprovider",
+                    tempCameraFile!!
+                )
+                cameraLauncher.launch(photoUri)
             } catch (e: Exception) {
-                Toast.makeText(this, "Error opening file picker: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Error opening camera: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            requestCameraPermission()
+        }
+    }
+
+    private fun selectImage() {
+        try {
+            imagePickerLauncher.launch("image/*")
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error opening image picker: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun selectDocument() {
+        try {
+            // For Android 13+ (API 33+), we don't need READ_EXTERNAL_STORAGE for document picker
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                documentPickerLauncher.launch("*/*")
+            } else {
+                // For older versions, check permission
+                if (checkStoragePermission()) {
+                    documentPickerLauncher.launch("*/*")
+                } else {
+                    requestStoragePermission()
+                }
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error opening file picker: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun createInternalCameraFile(): File {
+        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+        val imageFileName = "EXPENSE_${timeStamp}.jpg"
+        val storageDir = File(filesDir, "camera_photos")
+        if (!storageDir.exists()) {
+            storageDir.mkdirs()
+        }
+        return File(storageDir, imageFileName)
+    }
+
+    private fun copyFileToInternalStorage(sourceUri: Uri, callback: (Uri?) -> Unit) {
+        try {
+            val inputStream = contentResolver.openInputStream(sourceUri)
+            if (inputStream == null) {
+                callback(null)
+                return
+            }
+
+            val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+            val fileName = "document_${timeStamp}"
+            val extension = getFileExtensionFromUri(sourceUri)
+            val fullFileName = if (extension.isNotEmpty()) "${fileName}.${extension}" else fileName
+
+            val internalDir = File(filesDir, "documents")
+            if (!internalDir.exists()) {
+                internalDir.mkdirs()
+            }
+
+            val internalFile = File(internalDir, fullFileName)
+            val outputStream = FileOutputStream(internalFile)
+
+            inputStream.use { input ->
+                outputStream.use { output ->
+                    input.copyTo(output)
+                }
+            }
+
+            callback(Uri.fromFile(internalFile))
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error copying file: ${e.message}", Toast.LENGTH_SHORT).show()
+            callback(null)
+        }
+    }
+
+    private fun getFileExtensionFromUri(uri: Uri): String {
+        return try {
+            val mimeType = contentResolver.getType(uri)
+            when (mimeType) {
+                "image/jpeg" -> "jpg"
+                "image/png" -> "png"
+                "image/gif" -> "gif"
+                "application/pdf" -> "pdf"
+                "application/msword" -> "doc"
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "docx"
+                else -> {
+                    // Try to get extension from URI path
+                    val path = uri.path
+                    if (path != null && path.contains(".")) {
+                        path.substringAfterLast(".")
+                    } else {
+                        "file"
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            "file"
+        }
+    }
+
+    private fun checkStoragePermission(): Boolean {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            true // No permission needed for document picker on Android 13+
+        } else {
+            ContextCompat.checkSelfPermission(
+                this,
+                android.Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun checkCameraPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            this,
+            android.Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun requestStoragePermission() {
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE),
+            STORAGE_PERMISSION_CODE
+        )
+    }
+
+    private fun requestCameraPermission() {
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(android.Manifest.permission.CAMERA),
+            CAMERA_PERMISSION_CODE
+        )
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        when (requestCode) {
+            STORAGE_PERMISSION_CODE -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    documentPickerLauncher.launch("*/*")
+                } else {
+                    Toast.makeText(this, "Storage permission denied", Toast.LENGTH_SHORT).show()
+                }
+            }
+            CAMERA_PERMISSION_CODE -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    takePhoto()
+                } else {
+                    Toast.makeText(this, "Camera permission denied", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
@@ -212,29 +454,69 @@ class AddExpense : AppCompatActivity() {
     }
 
     private fun uploadDocumentThenSave(uid: String, expense: Expense) {
-        val fileName = "${System.currentTimeMillis()}_expense_document"
-        val storageRef = FirebaseStorage.getInstance().reference
-            .child("expense_documents/$uid/$fileName")
+        // Validate URI before upload
+        if (selectedDocumentUri == null) {
+            Toast.makeText(this, "No document selected", Toast.LENGTH_SHORT).show()
+            resetButtonState()
+            return
+        }
 
-        // Show loading state
-        btnSaveExpense.isEnabled = false
-        btnSaveExpense.text = "Uploading..."
+        val file = File(selectedDocumentUri!!.path!!)
+        if (!file.exists()) {
+            Toast.makeText(this, "Selected file no longer exists", Toast.LENGTH_SHORT).show()
+            resetButtonState()
+            return
+        }
 
-        storageRef.putFile(selectedDocumentUri!!)
-            .addOnSuccessListener {
-                storageRef.downloadUrl.addOnSuccessListener { uri ->
-                    // Update expense with document URL
-                    val expenseWithDoc = expense.copy(documentUrl = uri.toString())
-                    saveToFirebase(uid, expenseWithDoc)
-                }.addOnFailureListener { exception ->
-                    Toast.makeText(this, "Failed to get document URL: ${exception.message}", Toast.LENGTH_LONG).show()
+        try {
+            val fileExtension = getFileExtensionFromFile(file)
+            val fileName = "${System.currentTimeMillis()}_expense_document.$fileExtension"
+            val storageRef = FirebaseStorage.getInstance().reference
+                .child("expense_documents")
+                .child(uid)
+                .child(fileName)
+
+            // Show loading state
+            btnSaveExpense.isEnabled = false
+            btnSaveExpense.text = "Uploading..."
+
+            // Upload file using FileInputStream for better reliability
+            val fileStream = FileInputStream(file)
+            val uploadTask = storageRef.putStream(fileStream)
+
+            uploadTask.addOnProgressListener { taskSnapshot ->
+                val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount)
+                btnSaveExpense.text = "Uploading... ${progress.toInt()}%"
+            }
+                .addOnSuccessListener {
+                    fileStream.close()
+                    storageRef.downloadUrl.addOnSuccessListener { uri ->
+                        // Update expense with document URL
+                        val expenseWithDoc = expense.copy(documentUrl = uri.toString())
+                        saveToFirebase(uid, expenseWithDoc)
+                    }.addOnFailureListener { exception ->
+                        Toast.makeText(this, "Failed to get document URL: ${exception.message}", Toast.LENGTH_LONG).show()
+                        resetButtonState()
+                    }
+                }
+                .addOnFailureListener { exception ->
+                    fileStream.close()
+                    Toast.makeText(this, "Document upload failed: ${exception.message}", Toast.LENGTH_LONG).show()
                     resetButtonState()
                 }
-            }
-            .addOnFailureListener { exception ->
-                Toast.makeText(this, "Document upload failed: ${exception.message}", Toast.LENGTH_LONG).show()
-                resetButtonState()
-            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error preparing file for upload: ${e.message}", Toast.LENGTH_LONG).show()
+            resetButtonState()
+        }
+    }
+
+    private fun getFileExtensionFromFile(file: File): String {
+        val fileName = file.name
+        return if (fileName.contains(".")) {
+            fileName.substringAfterLast(".")
+        } else {
+            "file"
+        }
     }
 
     private fun saveToFirebase(uid: String, expense: Expense) {
@@ -254,6 +536,9 @@ class AddExpense : AppCompatActivity() {
         dbRef.child(key).setValue(expense)
             .addOnSuccessListener {
                 Toast.makeText(this, "Expense saved successfully!", Toast.LENGTH_SHORT).show()
+
+                // Clean up temporary files
+                cleanupTempFiles()
 
                 // Clear form
                 clearForm()
@@ -280,13 +565,25 @@ class AddExpense : AppCompatActivity() {
             }
     }
 
+    private fun cleanupTempFiles() {
+        try {
+            selectedDocumentUri?.let { uri ->
+                if (uri.scheme == "file") {
+                    File(uri.path!!).delete()
+                }
+            }
+            tempCameraFile?.delete()
+        } catch (e: Exception) {
+            // Ignore cleanup errors
+        }
+    }
+
     private fun updateBudgetData(category: String, amount: Double) {
         // Update budget data for dashboard categories
         val dashboardCategories = listOf("LIGHTS", "CLOTHES", "CAR", "TOILETRIES")
 
         if (category.uppercase() in dashboardCategories) {
             val currentMonth = SimpleDateFormat("MMMM", Locale.getDefault()).format(Date()).lowercase()
-
             // You can implement this similar to your original logic
             // but simplified without the complex timeout handling
         }
@@ -311,7 +608,9 @@ class AddExpense : AppCompatActivity() {
         calendar.time = Calendar.getInstance().time
         btnDatePicker.text = dateFormat.format(calendar.time)
         btnUploadDocument.text = "Upload Document (Optional)"
+        btnUploadDocument.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
         selectedDocumentUri = null
+        tempCameraFile = null
 
         // Clear focus and hide keyboard
         etAmount.clearFocus()
@@ -327,16 +626,23 @@ class AddExpense : AppCompatActivity() {
                 selectedDocumentUri != null
 
         if (hasUnsavedData) {
-            androidx.appcompat.app.AlertDialog.Builder(this)
+            AlertDialog.Builder(this)
                 .setTitle("Unsaved Changes")
                 .setMessage("You have unsaved changes. Are you sure you want to go back?")
                 .setPositiveButton("Yes") { _, _ ->
+                    cleanupTempFiles()
                     super.onBackPressed()
                 }
                 .setNegativeButton("No", null)
                 .show()
         } else {
+            cleanupTempFiles()
             super.onBackPressed()
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        cleanupTempFiles()
     }
 }

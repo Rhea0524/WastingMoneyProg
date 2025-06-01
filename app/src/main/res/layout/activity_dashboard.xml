@@ -309,53 +309,9 @@
                 android:id="@+id/monthSpinner"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="24dp"
                 android:background="@drawable/spinner_background"
                 android:padding="12dp" />
-
-            <!-- Goal Input -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="GOAL"
-                android:textColor="@android:color/white"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:layout_marginBottom="8dp" />
-
-            <EditText
-                android:id="@+id/goalInput"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:layout_marginBottom="16dp"
-                android:background="@drawable/input_background"
-                android:hint="Enter Goal"
-                android:textColorHint="#AAAAAA"
-                android:textColor="@android:color/black"
-                android:padding="12dp"
-                android:inputType="numberDecimal" />
-
-            <!-- Time Limit Input -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="TIME LIMIT"
-                android:textColor="@android:color/white"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:layout_marginBottom="8dp" />
-
-            <EditText
-                android:id="@+id/timeLimitInput"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:layout_marginBottom="24dp"
-                android:background="@drawable/input_background"
-                android:hint="Enter Time Limit"
-                android:textColorHint="#AAAAAA"
-                android:textColor="@android:color/black"
-                android:padding="12dp"
-                android:inputType="number" />
 
             <!-- Set Goal Button -->
             <Button
@@ -368,8 +324,6 @@
                 android:textSize="16sp"
                 android:background="@drawable/button_background"
                 android:layout_marginBottom="16dp" />
-
-
 
         </LinearLayout>
 

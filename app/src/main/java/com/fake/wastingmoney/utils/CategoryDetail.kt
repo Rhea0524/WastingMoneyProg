@@ -10,10 +10,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
-import java.text.NumberFormat
+import java.text.SimpleDateFormat
 import java.util.*
 
 class CategoryDetail : AppCompatActivity() {
@@ -26,7 +28,8 @@ class CategoryDetail : AppCompatActivity() {
     private lateinit var chartPlaceholder: View
     private lateinit var totalAmount: TextView
     private lateinit var fabAddTransaction: FloatingActionButton
-    private lateinit var transactionsContainer: LinearLayout
+    private lateinit var transactionsRecyclerView: RecyclerView
+    private lateinit var transactionsAdapter: TransactionsAdapter
 
     // Firebase
     private lateinit var firestore: FirebaseFirestore
@@ -35,6 +38,8 @@ class CategoryDetail : AppCompatActivity() {
     private var currentTotal: Double = 0.0
     private val transactions = mutableListOf<Transaction>()
     private var categoryName: String = "WATER and LIGHTS"
+    private var totalIncome: Double = 0.0
+    private var totalExpense: Double = 0.0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,11 +52,12 @@ class CategoryDetail : AppCompatActivity() {
             firestore = FirebaseFirestore.getInstance()
 
             // Get category from intent if passed
-            categoryName = intent.getStringExtra("CATEGORY_NAME") ?: "WATER and LIGHTS"
+            categoryName = intent.getStringExtra("CATEGORY_NAME")?.uppercase() ?: "WATER and LIGHTS"
 
             initializeViews()
             setupWindowInsets()
             setupClickListeners()
+            setupRecyclerView()
             loadTransactionsFromFirebase()
 
         } catch (e: Exception) {
@@ -82,13 +88,20 @@ class CategoryDetail : AppCompatActivity() {
             // Set category title
             categoryTitle.text = categoryName
 
-            // Create transactions container for dynamic content
-            transactionsContainer = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-            }
-
         } catch (e: Exception) {
             throw Exception("Failed to initialize views: ${e.message}")
+        }
+    }
+
+    private fun setupRecyclerView() {
+        try {
+            // You'll need to add a RecyclerView to your XML layout
+            // For now, we'll work with the existing static layout
+            transactionsAdapter = TransactionsAdapter(transactions) { transaction ->
+                showTransactionOptions(transaction)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -131,6 +144,7 @@ class CategoryDetail : AppCompatActivity() {
 
     private fun loadTransactionsFromFirebase() {
         try {
+            // Load both income and expense transactions for this category
             firestore.collection("transactions")
                 .whereEqualTo("category", categoryName)
                 .orderBy("timestamp", Query.Direction.DESCENDING)
@@ -138,6 +152,9 @@ class CategoryDetail : AppCompatActivity() {
                 .addOnSuccessListener { documents ->
                     try {
                         transactions.clear()
+                        totalIncome = 0.0
+                        totalExpense = 0.0
+
                         for (document in documents) {
                             val transaction = Transaction(
                                 id = document.id,
@@ -145,9 +162,17 @@ class CategoryDetail : AppCompatActivity() {
                                 description = document.getString("description") ?: "",
                                 amount = document.getDouble("amount") ?: 0.0,
                                 category = document.getString("category") ?: "",
+                                type = document.getString("type") ?: "expense", // "income" or "expense"
                                 timestamp = document.getLong("timestamp") ?: 0L
                             )
                             transactions.add(transaction)
+
+                            // Calculate totals by type
+                            if (transaction.type == "income") {
+                                totalIncome += transaction.amount
+                            } else {
+                                totalExpense += transaction.amount
+                            }
                         }
                         updateUI()
                     } catch (e: Exception) {
@@ -172,9 +197,9 @@ class CategoryDetail : AppCompatActivity() {
             // Fallback data matching your XML
             transactions.clear()
             transactions.addAll(listOf(
-                Transaction("", "28.01.25", "LIGHTS", 1500.00, categoryName, System.currentTimeMillis()),
-                Transaction("", "30.01.25", "WATER", 2500.00, categoryName, System.currentTimeMillis()),
-                Transaction("", "28.02.25", "LIGHTS", 1500.00, categoryName, System.currentTimeMillis())
+                Transaction("", "28.01.25", "LIGHTS", 1500.00, categoryName, "expense", System.currentTimeMillis()),
+                Transaction("", "30.01.25", "WATER", 2500.00, categoryName, "expense", System.currentTimeMillis()),
+                Transaction("", "28.02.25", "LIGHTS", 1500.00, categoryName, "expense", System.currentTimeMillis())
             ))
             updateUI()
         } catch (e: Exception) {
@@ -187,8 +212,8 @@ class CategoryDetail : AppCompatActivity() {
         try {
             calculateTotal()
             updateTotalDisplay()
-            // Note: Transaction list is static in XML, but you could make it dynamic
-            // by replacing the static LinearLayout with a RecyclerView
+            // If you implement RecyclerView, notify adapter here
+            // transactionsAdapter.notifyDataSetChanged()
         } catch (e: Exception) {
             e.printStackTrace()
             Toast.makeText(this, "Error updating UI: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -196,12 +221,18 @@ class CategoryDetail : AppCompatActivity() {
     }
 
     private fun calculateTotal() {
-        currentTotal = transactions.sumOf { it.amount }
+        // Net total = Income - Expenses
+        currentTotal = totalIncome - totalExpense
     }
 
     private fun updateTotalDisplay() {
         try {
-            totalAmount.text = "TOTAL:        R ${String.format("%.2f", currentTotal)}"
+            val totalText = if (currentTotal >= 0) {
+                "NET TOTAL: +R ${String.format("%.2f", currentTotal)}"
+            } else {
+                "NET TOTAL: -R ${String.format("%.2f", Math.abs(currentTotal))}"
+            }
+            totalAmount.text = totalText
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -236,6 +267,12 @@ class CategoryDetail : AppCompatActivity() {
             container.orientation = LinearLayout.VERTICAL
             container.setPadding(50, 40, 50, 10)
 
+            val typeSpinner = android.widget.Spinner(this)
+            val typeAdapter = android.widget.ArrayAdapter(this, android.R.layout.simple_spinner_item, listOf("Income", "Expense"))
+            typeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            typeSpinner.adapter = typeAdapter
+            container.addView(typeSpinner)
+
             val descInput = android.widget.EditText(this)
             descInput.hint = "Description (e.g., WATER, LIGHTS)"
             container.addView(descInput)
@@ -248,16 +285,17 @@ class CategoryDetail : AppCompatActivity() {
             builder.setView(container)
 
             builder.setPositiveButton("Add") { _, _ ->
+                val type = if (typeSpinner.selectedItemPosition == 0) "income" else "expense"
                 val description = descInput.text.toString().trim()
                 val amountStr = amountInput.text.toString().trim()
 
                 if (description.isNotEmpty() && amountStr.isNotEmpty()) {
                     try {
                         val amount = amountStr.toDouble()
-                        val currentDate = java.text.SimpleDateFormat("dd.MM.yy", Locale.getDefault())
+                        val currentDate = SimpleDateFormat("dd.MM.yy", Locale.getDefault())
                             .format(Date())
 
-                        saveTransactionToFirebase(currentDate, description, amount)
+                        saveTransactionToFirebase(currentDate, description, amount, type)
                     } catch (e: NumberFormatException) {
                         Toast.makeText(this, "Invalid amount", Toast.LENGTH_SHORT).show()
                     }
@@ -273,13 +311,14 @@ class CategoryDetail : AppCompatActivity() {
         }
     }
 
-    private fun saveTransactionToFirebase(date: String, description: String, amount: Double) {
+    private fun saveTransactionToFirebase(date: String, description: String, amount: Double, type: String) {
         try {
             val transaction = hashMapOf(
                 "date" to date,
                 "description" to description,
                 "amount" to amount,
                 "category" to categoryName,
+                "type" to type, // "income" or "expense"
                 "timestamp" to System.currentTimeMillis()
             )
 
@@ -299,19 +338,88 @@ class CategoryDetail : AppCompatActivity() {
         }
     }
 
-    private fun showChartDetails() {
-        Toast.makeText(this, "Chart functionality coming soon", Toast.LENGTH_SHORT).show()
+    private fun showTransactionOptions(transaction: Transaction) {
+        val builder = androidx.appcompat.app.AlertDialog.Builder(this)
+        builder.setTitle("Transaction Options")
+        builder.setItems(arrayOf("Edit", "Delete")) { _, which ->
+            when (which) {
+                0 -> editTransaction(transaction)
+                1 -> deleteTransaction(transaction)
+            }
+        }
+        builder.show()
     }
 
-    // Data class for transactions
+    private fun editTransaction(transaction: Transaction) {
+        // Implement edit functionality
+        Toast.makeText(this, "Edit functionality coming soon", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun deleteTransaction(transaction: Transaction) {
+        try {
+            firestore.collection("transactions")
+                .document(transaction.id)
+                .delete()
+                .addOnSuccessListener {
+                    Toast.makeText(this, "Transaction deleted", Toast.LENGTH_SHORT).show()
+                    loadTransactionsFromFirebase()
+                }
+                .addOnFailureListener { e ->
+                    Toast.makeText(this, "Error deleting: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun showChartDetails() {
+        val message = """
+            Category: $categoryName
+            Total Income: R ${String.format("%.2f", totalIncome)}
+            Total Expenses: R ${String.format("%.2f", totalExpense)}
+            Net Balance: R ${String.format("%.2f", currentTotal)}
+            Transactions: ${transactions.size}
+        """.trimIndent()
+
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Category Summary")
+            .setMessage(message)
+            .setPositiveButton("OK", null)
+            .show()
+    }
+
+    // Enhanced data class for transactions
     data class Transaction(
         val id: String = "",
         val date: String,
         val description: String,
         val amount: Double,
         val category: String,
+        val type: String = "expense", // "income" or "expense"
         val timestamp: Long
     )
+
+    // Simple adapter for RecyclerView (if you choose to implement it)
+    class TransactionsAdapter(
+        private val transactions: List<Transaction>,
+        private val onItemClick: (Transaction) -> Unit
+    ) : RecyclerView.Adapter<TransactionsAdapter.ViewHolder>() {
+
+        class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            // Define your ViewHolder here
+        }
+
+        override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): ViewHolder {
+            // Implement ViewHolder creation
+            return ViewHolder(android.widget.TextView(parent.context))
+        }
+
+        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+            // Implement data binding
+        }
+
+        override fun getItemCount() = transactions.size
+    }
 
     override fun onResume() {
         super.onResume()
