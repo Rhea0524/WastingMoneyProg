@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "661509145975",
+    "project_id": "budgettrackerapp-24e70",
+    "storage_bucket": "budgettrackerapp-24e70.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:661509145975:android:e6a60c5062f063a8f20d72",
+        "android_client_info": {
+          "package_name": "com.fake.wastingmoney"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAQUPJMfnCasRsogGy1-lR4EzwEOVOV9fI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
