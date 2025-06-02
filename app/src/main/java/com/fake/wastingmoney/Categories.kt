@@ -5,13 +5,17 @@ import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
 import android.view.View
-import android.view.ViewGroup
-import android.widget.FrameLayout
-import android.widget.LinearLayout
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.github.mikephil.charting.charts.BarChart
+import com.github.mikephil.charting.charts.LineChart
+import com.github.mikephil.charting.components.XAxis
+import com.github.mikephil.charting.components.YAxis
+import com.github.mikephil.charting.data.*
+import com.github.mikephil.charting.formatter.IndexAxisValueFormatter
+import com.github.mikephil.charting.formatter.ValueFormatter
+import com.github.mikephil.charting.interfaces.datasets.ILineDataSet
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.database.*
@@ -19,6 +23,7 @@ import com.google.firebase.database.ktx.database
 import com.google.firebase.ktx.Firebase
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.collections.ArrayList
 
 class Categories : AppCompatActivity() {
 
@@ -30,24 +35,35 @@ class Categories : AppCompatActivity() {
     private lateinit var database: FirebaseDatabase
     private lateinit var auth: FirebaseAuth
 
+    // UI Components
+    private lateinit var barChart: BarChart
+    private lateinit var lineChart: LineChart
+    private lateinit var periodSpinner: Spinner
+    private lateinit var refreshButton: Button
+    private lateinit var monthlyGraphTitle: TextView
+
     // Data storage
     private val categorySpending = mutableMapOf<String, Double>()
     private val categoryIncomes = mutableMapOf<String, Double>()
-    private val monthlyData = mutableMapOf<String, Double>()
+    private val categoryGoals = mutableMapOf<String, Pair<Double, Double>>() // min, max goals
+    private val monthlyData = mutableMapOf<String, MutableMap<String, Double>>() // month -> category -> amount
+    private val periodOptions = listOf("Last 30 Days", "Last 3 Months", "Last 6 Months", "This Year")
 
-    // Direct references to chart elements
-    private val chartBars = mutableListOf<View>()
-    private val chartLabels = mutableListOf<TextView>()
+    // Data loading flags
+    private var expensesLoaded = false
+    private var incomesLoaded = false
+    private var goalsLoaded = false
 
-    // Category colors for better visualization
+    // Category configuration
+    private val categoryNames = listOf("TOILETRIES", "CAR", "WATER & LIGHTS", "GROCERIES", "CLOTHES", "OTHER")
     private val categoryColors = mapOf(
-        "GROCERIES" to "#4CAF50",      // Green
-        "CAR" to "#2196F3",            // Blue
-        "CLOTHES" to "#9C27B0",        // Purple
-        "CLOTHING" to "#9C27B0",       // Purple (alias for compatibility)
-        "WATER & LIGHTS" to "#FF9800", // Orange
-        "TOILETRIES" to "#E91E63",     // Pink
-        "OTHER" to "#607D8B"           // Blue Grey
+        "GROCERIES" to Color.parseColor("#4CAF50"),
+        "CAR" to Color.parseColor("#2196F3"),
+        "CLOTHES" to Color.parseColor("#9C27B0"),
+        "CLOTHING" to Color.parseColor("#9C27B0"),
+        "WATER & LIGHTS" to Color.parseColor("#FF9800"),
+        "TOILETRIES" to Color.parseColor("#E91E63"),
+        "OTHER" to Color.parseColor("#607D8B")
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,15 +73,15 @@ class Categories : AppCompatActivity() {
             setContentView(R.layout.activity_categories)
 
             initFirebase()
+            initViews()
+            setupSpinner()
             setupClickListeners()
-            setupChartReferences()
 
-            // Only load data if user is authenticated
             if (auth.currentUser != null) {
-                loadDataFromFirebase()
+                showLoadingState()
+                loadAllData()
             } else {
                 Toast.makeText(this, "Please log in first", Toast.LENGTH_SHORT).show()
-                // Optionally redirect to login activity
             }
 
         } catch (e: Exception) {
@@ -78,6 +94,10 @@ class Categories : AppCompatActivity() {
         try {
             database = Firebase.database
             auth = Firebase.auth
+
+            // Enable offline persistence for better performance
+            database.setPersistenceEnabled(true)
+
             Log.d(TAG, "Firebase initialized successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize Firebase: ${e.message}", e)
@@ -85,36 +105,106 @@ class Categories : AppCompatActivity() {
         }
     }
 
-    private fun setupClickListeners() {
+    private fun initViews() {
         try {
-            // Menu icon click - add null check
-            //findViewById<LinearLayout>(R.id.menu_icon)?.setOnClickListener {
-              //  Toast.makeText(this, "Menu clicked", Toast.LENGTH_SHORT).show()
-          //  }
+            barChart = findViewById(R.id.bar_chart)
+            lineChart = findViewById(R.id.line_chart)
+            periodSpinner = findViewById(R.id.period_spinner)
+            refreshButton = findViewById(R.id.refresh_button)
+            monthlyGraphTitle = findViewById(R.id.monthly_graph_title)
 
-            // Category clicks with better error handling
-            val gridLayout = findViewById<android.widget.GridLayout>(R.id.categories_grid)
-            if (gridLayout == null) {
-                Log.e(TAG, "categories_grid not found in layout")
-                return
+            setupCharts()
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error initializing views: ${e.message}", e)
+        }
+    }
+
+    private fun setupCharts() {
+        // Setup Bar Chart
+        barChart.apply {
+            description.isEnabled = false
+            setTouchEnabled(true)
+            isDragEnabled = true
+            setScaleEnabled(true)
+            setPinchZoom(true)
+            setDrawBarShadow(false)
+            setDrawValueAboveBar(true)
+            setMaxVisibleValueCount(60)
+            legend.isEnabled = true
+
+            xAxis.apply {
+                position = XAxis.XAxisPosition.BOTTOM
+                setDrawGridLines(false)
+                granularity = 1f
+                textColor = Color.WHITE
             }
 
-            val categoryNames = listOf("TOILETRIES", "CAR", "WATER & LIGHTS", "GROCERIES", "CLOTHES", "OTHER")
+            axisLeft.apply {
+                setDrawGridLines(true)
+                gridColor = Color.GRAY
+                textColor = Color.WHITE
+                axisMinimum = 0f
+            }
 
-            for (i in 0 until minOf(gridLayout.childCount, categoryNames.size)) {
-                try {
+            axisRight.isEnabled = false
+        }
+
+        // Setup Line Chart for trends
+        lineChart.apply {
+            description.isEnabled = false
+            setTouchEnabled(true)
+            isDragEnabled = true
+            setScaleEnabled(true)
+            setPinchZoom(true)
+            legend.isEnabled = true
+
+            xAxis.apply {
+                position = XAxis.XAxisPosition.BOTTOM
+                setDrawGridLines(false)
+                textColor = Color.WHITE
+            }
+
+            axisLeft.apply {
+                setDrawGridLines(true)
+                gridColor = Color.GRAY
+                textColor = Color.WHITE
+            }
+
+            axisRight.isEnabled = false
+        }
+    }
+
+    private fun setupSpinner() {
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, periodOptions)
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        periodSpinner.adapter = adapter
+
+        periodSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (allDataLoaded()) {
+                    updateChartsForPeriod(periodOptions[position])
+                }
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+    }
+
+    private fun setupClickListeners() {
+        try {
+            refreshButton.setOnClickListener {
+                resetDataLoadingFlags()
+                showLoadingState()
+                loadAllData()
+            }
+
+            val gridLayout = findViewById<GridLayout>(R.id.categories_grid)
+            if (gridLayout != null) {
+                for (i in 0 until minOf(gridLayout.childCount, categoryNames.size)) {
                     val categoryFrame = gridLayout.getChildAt(i) as? FrameLayout
-                    if (categoryFrame != null) {
-                        val categoryName = categoryNames[i]
-                        categoryFrame.setOnClickListener {
-                            onCategoryClick(categoryName)
-                        }
-                        Log.d(TAG, "Set click listener for category: $categoryName")
-                    } else {
-                        Log.w(TAG, "Category frame at index $i is not a FrameLayout")
+                    categoryFrame?.setOnClickListener {
+                        onCategoryClick(categoryNames[i])
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error setting up click listener for category $i: ${e.message}", e)
                 }
             }
 
@@ -123,397 +213,485 @@ class Categories : AppCompatActivity() {
         }
     }
 
-    private fun setupChartReferences() {
-        try {
-            // Get direct references to the chart bars and labels from the XML
-            val rootView = findViewById<View>(android.R.id.content)
-            if (rootView != null) {
-                findChartElements(rootView)
-                Log.d(TAG, "Found ${chartBars.size} chart bars and ${chartLabels.size} chart labels")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error setting up chart references: ${e.message}", e)
-        }
-    }
-
-    private fun findChartElements(view: View) {
-        try {
-            if (view is ViewGroup) {
-                for (i in 0 until view.childCount) {
-                    val child = view.getChildAt(i)
-
-                    // Look for the bar chart container
-                    if (child is LinearLayout && child.orientation == LinearLayout.HORIZONTAL) {
-                        // Check if this container has the chart bars
-                        val hasChartBars = hasBarChartCharacteristics(child)
-                        if (hasChartBars) {
-                            // Found the bar chart container
-                            for (j in 0 until child.childCount) {
-                                val bar = child.getChildAt(j)
-                                if (bar.background != null) {
-                                    chartBars.add(bar)
-                                }
-                            }
-
-                            // Look for labels in the next sibling
-                            val parentContainer = child.parent as? ViewGroup
-                            if (parentContainer != null) {
-                                val barIndex = parentContainer.indexOfChild(child)
-                                if (barIndex + 1 < parentContainer.childCount) {
-                                    val labelContainer = parentContainer.getChildAt(barIndex + 1)
-                                    if (labelContainer is LinearLayout) {
-                                        for (k in 0 until labelContainer.childCount) {
-                                            val label = labelContainer.getChildAt(k)
-                                            if (label is TextView) {
-                                                chartLabels.add(label)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            return // Found what we need
-                        }
-                    }
-
-                    findChartElements(child)
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error finding chart elements: ${e.message}", e)
-        }
-    }
-
-    private fun hasBarChartCharacteristics(container: LinearLayout): Boolean {
-        return try {
-            // Check if this container has multiple views with backgrounds (chart bars)
-            var backgroundCount = 0
-            for (i in 0 until container.childCount) {
-                val child = container.getChildAt(i)
-                if (child.background != null) {
-                    backgroundCount++
-                }
-            }
-            backgroundCount >= 4 // Should have 4 bars
-        } catch (e: Exception) {
-            Log.e(TAG, "Error checking bar chart characteristics: ${e.message}", e)
-            false
-        }
-    }
-
     private fun onCategoryClick(categoryName: String) {
         try {
             Log.d(TAG, "Category clicked: $categoryName")
-            Toast.makeText(this, "Clicked on $categoryName", Toast.LENGTH_SHORT).show()
-
-            // Check if AddExpense activity exists before starting intent
             val intent = Intent(this, AddExpense::class.java)
             intent.putExtra("CATEGORY", categoryName)
-
-            // Check if the activity can handle this intent
-            if (intent.resolveActivity(packageManager) != null) {
-                startActivity(intent)
-            } else {
-                Log.e(TAG, "AddExpense activity not found")
-                Toast.makeText(this, "AddExpense activity not available", Toast.LENGTH_SHORT).show()
-            }
+            startActivity(intent)
 
         } catch (e: Exception) {
             Log.e(TAG, "Error in onCategoryClick: ${e.message}", e)
-            Toast.makeText(this, "Error opening category: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun loadDataFromFirebase() {
+    private fun showLoadingState() {
+        monthlyGraphTitle.text = "Loading data..."
+        refreshButton.isEnabled = false
+    }
+
+    private fun hideLoadingState() {
+        refreshButton.isEnabled = true
+    }
+
+    private fun resetDataLoadingFlags() {
+        expensesLoaded = false
+        incomesLoaded = false
+        goalsLoaded = false
+    }
+
+    private fun allDataLoaded(): Boolean {
+        return expensesLoaded && incomesLoaded && goalsLoaded
+    }
+
+    private fun checkAndUpdateUI() {
+        if (allDataLoaded()) {
+            hideLoadingState()
+            updateChartsAndUI()
+        }
+    }
+
+    private fun loadAllData() {
         try {
             val currentUser = auth.currentUser
             if (currentUser == null) {
-                Log.w(TAG, "No authenticated user found")
                 Toast.makeText(this, "Please log in first", Toast.LENGTH_SHORT).show()
                 return
             }
 
-            Log.d(TAG, "Loading data for user: ${currentUser.uid}")
+            Log.d(TAG, "Loading all data for user: ${currentUser.uid}")
+
+            // Clear existing data
+            categorySpending.clear()
+            categoryIncomes.clear()
+            categoryGoals.clear()
+            monthlyData.clear()
+
+            // Load all data types
+            loadGoalsFromDashboard()
             loadExpenseData()
             loadIncomeData()
 
         } catch (e: Exception) {
-            Log.e(TAG, "Error loading data from Firebase: ${e.message}", e)
-            Toast.makeText(this, "Error loading data", Toast.LENGTH_SHORT).show()
+            Log.e(TAG, "Error loading data: ${e.message}", e)
+            hideLoadingState()
+        }
+    }
+
+    private fun loadGoalsFromDashboard() {
+        val userId = auth.currentUser?.uid ?: return
+
+        try {
+            database.getReference("goals").child(userId)
+                .addListenerForSingleValueEvent(object : ValueEventListener {
+                    override fun onDataChange(snapshot: DataSnapshot) {
+                        try {
+                            categoryGoals.clear()
+
+                            for (goalSnapshot in snapshot.children) {
+                                val category = goalSnapshot.child("category").getValue(String::class.java) ?: "OTHER"
+                                val minGoal = goalSnapshot.child("minGoal").getValue(Double::class.java) ?: 0.0
+                                val maxGoal = goalSnapshot.child("maxGoal").getValue(Double::class.java) ?: 0.0
+
+                                categoryGoals[category.uppercase()] = Pair(minGoal, maxGoal)
+                            }
+
+                            Log.d(TAG, "Loaded ${categoryGoals.size} category goals")
+                            goalsLoaded = true
+                            checkAndUpdateUI()
+
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error processing goals data: ${e.message}", e)
+                            goalsLoaded = true
+                            checkAndUpdateUI()
+                        }
+                    }
+
+                    override fun onCancelled(error: DatabaseError) {
+                        Log.e(TAG, "Goals data loading cancelled: ${error.message}")
+                        goalsLoaded = true
+                        checkAndUpdateUI()
+                    }
+                })
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting up goals listener: ${e.message}", e)
+            goalsLoaded = true
+            checkAndUpdateUI()
         }
     }
 
     private fun loadExpenseData() {
-        val userId = auth.currentUser?.uid
-        if (userId == null) {
-            Log.e(TAG, "User ID is null in loadExpenseData")
-            return
-        }
+        val userId = auth.currentUser?.uid ?: return
 
         try {
             database.getReference("expenses").child(userId)
-                .addValueEventListener(object : ValueEventListener {
+                .addListenerForSingleValueEvent(object : ValueEventListener {
                     override fun onDataChange(snapshot: DataSnapshot) {
                         try {
                             categorySpending.clear()
+
+                            // Clear monthly expense data
                             monthlyData.clear()
 
-                            val currentMonth = SimpleDateFormat("MMM", Locale.getDefault()).format(Date())
-                            Log.d(TAG, "Loading expenses for current month: $currentMonth")
-
+                            var expenseCount = 0
                             for (expenseSnapshot in snapshot.children) {
-                                try {
-                                    val amount = expenseSnapshot.child("amount").getValue(Double::class.java) ?: 0.0
-                                    val category = expenseSnapshot.child("category").getValue(String::class.java) ?: "OTHER"
-                                    val date = expenseSnapshot.child("date").getValue(String::class.java) ?: ""
+                                val amount = expenseSnapshot.child("amount").getValue(Double::class.java) ?: 0.0
+                                val category = expenseSnapshot.child("category").getValue(String::class.java) ?: "OTHER"
+                                val dateStr = expenseSnapshot.child("date").getValue(String::class.java) ?: ""
 
-                                    // Add to category totals
-                                    val currentAmount = categorySpending[category.uppercase()] ?: 0.0
-                                    categorySpending[category.uppercase()] = currentAmount + amount
+                                // Normalize category name
+                                val categoryKey = category.uppercase().replace("CLOTHING", "CLOTHES")
 
-                                    // Add to monthly data if it's current month
-                                    if (date.contains(currentMonth, ignoreCase = true)) {
-                                        val monthlyAmount = monthlyData[category.uppercase()] ?: 0.0
-                                        monthlyData[category.uppercase()] = monthlyAmount + amount
-                                    }
+                                // Add to total spending
+                                categorySpending[categoryKey] = (categorySpending[categoryKey] ?: 0.0) + amount
+                                expenseCount++
 
-                                } catch (e: Exception) {
-                                    Log.w(TAG, "Error processing expense entry: ${e.message}", e)
-                                    // Skip invalid entries
-                                }
+                                // Add to monthly data for trends
+                                processMonthlyExpenseData(dateStr, categoryKey, amount)
                             }
 
-                            Log.d(TAG, "Loaded ${categorySpending.size} expense categories")
-                            updateChartsAndUI()
+                            Log.d(TAG, "Loaded $expenseCount expenses for ${categorySpending.size} categories across ${monthlyData.size} months")
+                            expensesLoaded = true
+                            checkAndUpdateUI()
 
                         } catch (e: Exception) {
-                            Log.e(TAG, "Error in onDataChange for expenses: ${e.message}", e)
+                            Log.e(TAG, "Error processing expense data: ${e.message}", e)
+                            expensesLoaded = true
+                            checkAndUpdateUI()
                         }
                     }
 
                     override fun onCancelled(error: DatabaseError) {
                         Log.e(TAG, "Expense data loading cancelled: ${error.message}")
-                        Toast.makeText(this@Categories, "Error loading expenses: ${error.message}",
-                            Toast.LENGTH_SHORT).show()
+                        expensesLoaded = true
+                        checkAndUpdateUI()
                     }
                 })
+
         } catch (e: Exception) {
-            Log.e(TAG, "Error setting up expense data listener: ${e.message}", e)
+            Log.e(TAG, "Error setting up expense listener: ${e.message}", e)
+            expensesLoaded = true
+            checkAndUpdateUI()
+        }
+    }
+
+    private fun processMonthlyExpenseData(dateStr: String, categoryKey: String, amount: Double) {
+        try {
+            // Try multiple date formats that might be used in AddExpense activity
+            val dateFormats = listOf(
+                SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()),
+                SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()),
+                SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
+            )
+
+            var date: Date? = null
+            for (format in dateFormats) {
+                try {
+                    date = format.parse(dateStr)
+                    if (date != null) break
+                } catch (e: Exception) {
+                    // Try next format
+                }
+            }
+
+            if (date != null) {
+                val monthKey = SimpleDateFormat("MMM yyyy", Locale.getDefault()).format(date)
+
+                if (!monthlyData.containsKey(monthKey)) {
+                    monthlyData[monthKey] = mutableMapOf()
+                }
+
+                val monthData = monthlyData[monthKey]!!
+                monthData[categoryKey] = (monthData[categoryKey] ?: 0.0) + amount
+            } else {
+                Log.w(TAG, "Could not parse date: $dateStr")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error processing monthly data for date: $dateStr", e)
         }
     }
 
     private fun loadIncomeData() {
-        val userId = auth.currentUser?.uid
-        if (userId == null) {
-            Log.e(TAG, "User ID is null in loadIncomeData")
-            return
-        }
+        val userId = auth.currentUser?.uid ?: return
 
         try {
             database.getReference("incomes").child(userId)
-                .addValueEventListener(object : ValueEventListener {
+                .addListenerForSingleValueEvent(object : ValueEventListener {
                     override fun onDataChange(snapshot: DataSnapshot) {
                         try {
                             categoryIncomes.clear()
 
+                            var incomeCount = 0
                             for (incomeSnapshot in snapshot.children) {
-                                try {
-                                    val amount = incomeSnapshot.child("amount").getValue(Double::class.java) ?: 0.0
-                                    val source = incomeSnapshot.child("source").getValue(String::class.java) ?: "OTHER"
+                                val amount = incomeSnapshot.child("amount").getValue(Double::class.java) ?: 0.0
+                                val source = incomeSnapshot.child("source").getValue(String::class.java) ?: "OTHER"
 
-                                    val currentAmount = categoryIncomes[source.uppercase()] ?: 0.0
-                                    categoryIncomes[source.uppercase()] = currentAmount + amount
-
-                                } catch (e: Exception) {
-                                    Log.w(TAG, "Error processing income entry: ${e.message}", e)
-                                    // Skip invalid entries
-                                }
+                                categoryIncomes[source.uppercase()] = (categoryIncomes[source.uppercase()] ?: 0.0) + amount
+                                incomeCount++
                             }
 
-                            Log.d(TAG, "Loaded ${categoryIncomes.size} income categories")
-                            updateChartsAndUI()
+                            Log.d(TAG, "Loaded $incomeCount incomes for ${categoryIncomes.size} sources")
+                            incomesLoaded = true
+                            checkAndUpdateUI()
 
                         } catch (e: Exception) {
-                            Log.e(TAG, "Error in onDataChange for incomes: ${e.message}", e)
+                            Log.e(TAG, "Error processing income data: ${e.message}", e)
+                            incomesLoaded = true
+                            checkAndUpdateUI()
                         }
                     }
 
                     override fun onCancelled(error: DatabaseError) {
                         Log.e(TAG, "Income data loading cancelled: ${error.message}")
-                        Toast.makeText(this@Categories, "Error loading incomes: ${error.message}",
-                            Toast.LENGTH_SHORT).show()
+                        incomesLoaded = true
+                        checkAndUpdateUI()
                     }
                 })
+
         } catch (e: Exception) {
-            Log.e(TAG, "Error setting up income data listener: ${e.message}", e)
+            Log.e(TAG, "Error setting up income listener: ${e.message}", e)
+            incomesLoaded = true
+            checkAndUpdateUI()
+        }
+    }
+
+    private fun updateChartsForPeriod(period: String) {
+        try {
+            Log.d(TAG, "Updating charts for period: $period")
+
+            val filteredData = getDataForPeriod(period)
+            updateBarChart(filteredData)
+            updateLineChart(period)
+            updateCategoryGrid()
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating charts for period: ${e.message}", e)
+        }
+    }
+
+    private fun getDataForPeriod(period: String): Map<String, Double> {
+        val calendar = Calendar.getInstance()
+        val dateFormat = SimpleDateFormat("MMM yyyy", Locale.getDefault())
+
+        val monthsToInclude = when (period) {
+            "Last 30 Days" -> 1
+            "Last 3 Months" -> 3
+            "Last 6 Months" -> 6
+            "This Year" -> 12
+            else -> 3
+        }
+
+        val filteredData = mutableMapOf<String, Double>()
+
+        // For "Last 30 Days", use all data if monthly breakdown isn't detailed enough
+        if (period == "Last 30 Days") {
+            return categorySpending.toMap()
+        }
+
+        // For other periods, filter by months
+        for (i in 0 until monthsToInclude) {
+            val monthKey = dateFormat.format(calendar.time)
+
+            monthlyData[monthKey]?.forEach { (category, amount) ->
+                filteredData[category] = (filteredData[category] ?: 0.0) + amount
+            }
+
+            calendar.add(Calendar.MONTH, -1)
+        }
+
+        // If no monthly data found, return current totals
+        return if (filteredData.isEmpty()) categorySpending.toMap() else filteredData
+    }
+
+    private fun updateBarChart(data: Map<String, Double>) {
+        try {
+            // Clear any existing limit lines
+            barChart.axisLeft.removeAllLimitLines()
+
+            val entries = ArrayList<BarEntry>()
+            val colors = ArrayList<Int>()
+            val labels = ArrayList<String>()
+
+            categoryNames.forEachIndexed { index, category ->
+                val amount = data[category] ?: 0.0
+                val goals = categoryGoals[category]
+
+                entries.add(BarEntry(index.toFloat(), amount.toFloat()))
+                colors.add(categoryColors[category] ?: categoryColors["OTHER"]!!)
+                labels.add(category.replace(" & ", "\n&\n"))
+            }
+
+            val dataSet = BarDataSet(entries, "Spending by Category")
+            dataSet.colors = colors
+            dataSet.valueTextColor = Color.WHITE
+            dataSet.valueTextSize = 10f
+            dataSet.valueFormatter = object : ValueFormatter() {
+                override fun getFormattedValue(value: Float): String {
+                    return if (value > 0) "R${formatAmount(value.toDouble())}" else ""
+                }
+            }
+
+            val barData = BarData(dataSet)
+            barData.barWidth = 0.8f
+
+            barChart.data = barData
+            barChart.xAxis.valueFormatter = IndexAxisValueFormatter(labels)
+            barChart.xAxis.setLabelCount(labels.size)
+            barChart.invalidate()
+            barChart.animateY(1000)
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating bar chart: ${e.message}", e)
+        }
+    }
+
+    private fun updateLineChart(period: String) {
+        try {
+            val lineEntries = mutableMapOf<String, ArrayList<Entry>>()
+            val sortedMonths = monthlyData.keys.sortedWith { month1, month2 ->
+                try {
+                    val format = SimpleDateFormat("MMM yyyy", Locale.getDefault())
+                    val date1 = format.parse(month1)
+                    val date2 = format.parse(month2)
+                    date1?.compareTo(date2) ?: 0
+                } catch (e: Exception) {
+                    month1.compareTo(month2)
+                }
+            }
+
+            // Initialize entries for each category
+            categoryNames.forEach { category ->
+                lineEntries[category] = ArrayList()
+            }
+
+            sortedMonths.forEachIndexed { monthIndex, month ->
+                categoryNames.forEach { category ->
+                    val amount = monthlyData[month]?.get(category) ?: 0.0
+                    lineEntries[category]?.add(Entry(monthIndex.toFloat(), amount.toFloat()))
+                }
+            }
+
+            val dataSets = ArrayList<ILineDataSet>()
+
+            lineEntries.forEach { (category, entries) ->
+                if (entries.isNotEmpty() && entries.any { it.y > 0 }) {
+                    val dataSet = LineDataSet(entries, category.replace(" & ", "\n&\n"))
+                    dataSet.color = categoryColors[category] ?: categoryColors["OTHER"]!!
+                    dataSet.setCircleColor(categoryColors[category] ?: categoryColors["OTHER"]!!)
+                    dataSet.lineWidth = 2f
+                    dataSet.circleRadius = 3f
+                    dataSet.setDrawValues(false)
+                    dataSet.mode = LineDataSet.Mode.CUBIC_BEZIER
+
+                    dataSets.add(dataSet)
+                }
+            }
+
+            if (dataSets.isNotEmpty()) {
+                val lineData = LineData(dataSets as List<ILineDataSet>)
+                lineChart.data = lineData
+                lineChart.xAxis.valueFormatter = IndexAxisValueFormatter(sortedMonths.map {
+                    it.substring(0, 3) // Show abbreviated month
+                })
+                lineChart.invalidate()
+                lineChart.animateX(1000)
+            } else {
+                // Clear chart if no data
+                lineChart.clear()
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating line chart: ${e.message}", e)
+        }
+    }
+
+    private fun updateCategoryGrid() {
+        try {
+            val gridLayout = findViewById<GridLayout>(R.id.categories_grid)
+            if (gridLayout == null) return
+
+            for (i in 0 until minOf(gridLayout.childCount, categoryNames.size)) {
+                val categoryFrame = gridLayout.getChildAt(i) as? FrameLayout
+                val textView = categoryFrame?.getChildAt(0) as? TextView
+
+                if (textView != null) {
+                    val categoryName = categoryNames[i]
+                    val amount = categorySpending[categoryName] ?: 0.0
+                    val goals = categoryGoals[categoryName]
+
+                    val displayText = buildString {
+                        append(categoryName)
+                        if (amount > 0) {
+                            append("\nR${formatAmount(amount)}")
+                        }
+                        goals?.let { (minGoal, maxGoal) ->
+                            if (minGoal > 0 || maxGoal > 0) {
+                                append("\nGoal: R${formatAmount(minGoal)}-${formatAmount(maxGoal)}")
+                            }
+                        }
+                    }
+
+                    textView.text = displayText
+
+                    // Reset background first
+                    categoryFrame?.setBackgroundResource(R.drawable.circle_background)
+
+                    // Color coding based on goal achievement
+                    goals?.let { (minGoal, maxGoal) ->
+                        when {
+                            maxGoal > 0 && amount > maxGoal -> {
+                                // Over budget - red tint
+                                categoryFrame?.setBackgroundColor(Color.parseColor("#33FF0000"))
+                            }
+                            minGoal > 0 && amount < minGoal -> {
+                                // Under minimum - yellow tint
+                                categoryFrame?.setBackgroundColor(Color.parseColor("#33FFFF00"))
+                            }
+                            minGoal > 0 && maxGoal > 0 && amount >= minGoal && amount <= maxGoal -> {
+                                // Within goals - green tint
+                                categoryFrame?.setBackgroundColor(Color.parseColor("#3300FF00"))
+                            }
+
+                            else -> {}
+                        }
+                    }
+                }
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating category grid: ${e.message}", e)
         }
     }
 
     private fun updateChartsAndUI() {
         try {
-            updateMonthlyGraph()
-            updateCategoryDisplay()
+            val selectedPeriod = periodOptions[periodSpinner.selectedItemPosition]
+            updateChartsForPeriod(selectedPeriod)
+
+            // Update title with total spending
+            val totalSpent = categorySpending.values.sum()
+            val totalIncome = categoryIncomes.values.sum()
+
+            monthlyGraphTitle.text = "Total Spending: R${formatAmount(totalSpent)}" +
+                    if (totalIncome > 0) " | Income: R${formatAmount(totalIncome)}" else ""
+
         } catch (e: Exception) {
             Log.e(TAG, "Error updating charts and UI: ${e.message}", e)
-        }
-    }
-
-    private fun updateMonthlyGraph() {
-        try {
-            // Map the XML labels to actual categories with colors
-            val chartCategories = listOf(
-                Triple("GROCERIES", "GROCERIES", categoryColors["GROCERIES"]!!),
-                Triple("CAR", "CAR", categoryColors["CAR"]!!),
-                Triple("CLOTHES", "CLOTHES", categoryColors["CLOTHES"]!!), // Fixed to match your expense data
-                Triple("LIGHTS", "WATER & LIGHTS", categoryColors["WATER & LIGHTS"]!!)
-            )
-
-            if (chartBars.size >= 4 && chartLabels.size >= 4) {
-                try {
-                    val maxAmount = chartCategories.maxOfOrNull { (_, category, _) ->
-                        monthlyData[category] ?: 0.0
-                    } ?: 1.0
-
-                    chartCategories.forEachIndexed { index, (label, category, color) ->
-                        val amount = monthlyData[category] ?: 0.0
-
-                        // Update bar height (proportional to spending)
-                        val heightRatio = if (maxAmount > 0) (amount / maxAmount) else 0.0
-                        val minHeight = 20 // Minimum visible height
-                        val maxHeight = 120
-                        val newHeight = (minHeight + (heightRatio * (maxHeight - minHeight))).toInt()
-
-                        val bar = chartBars[index]
-                        val params = bar.layoutParams
-                        if (params != null) {
-                            params.height = dpToPx(newHeight)
-                            bar.layoutParams = params
-                        }
-
-                        // Set bar color
-                        bar.setBackgroundColor(Color.parseColor(color))
-
-                        // Update label with better formatting
-                        val labelText = if (amount > 0) {
-                            "$label\nR${formatAmount(amount)}"
-                        } else {
-                            "$label\nR0"
-                        }
-                        chartLabels[index].text = labelText
-
-                        // Make labels more readable
-                        chartLabels[index].textSize = 10f
-                        chartLabels[index].setTextColor(ContextCompat.getColor(this, android.R.color.white))
-                    }
-
-                    // Show monthly summary
-                    val totalSpent = monthlyData.values.sum()
-                    val currentMonth = SimpleDateFormat("MMMM", Locale.getDefault()).format(Date())
-
-                    // Find the monthly graph title and update it
-                    updateMonthlyGraphTitle("$currentMonth Spending: R${formatAmount(totalSpent)}")
-
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error updating chart bars: ${e.message}", e)
-                    Toast.makeText(this, "Chart update failed: ${e.message}", Toast.LENGTH_SHORT).show()
-                }
-            } else {
-                // Fallback - show data in toast if chart elements not found
-                val totalSpent = monthlyData.values.sum()
-                val topCategory = monthlyData.maxByOrNull { it.value }
-
-                val message = if (topCategory != null && topCategory.value > 0) {
-                    "Monthly: R${formatAmount(totalSpent)} | Top: ${topCategory.key} R${formatAmount(topCategory.value)}"
-                } else {
-                    "No spending data for this month"
-                }
-
-                Log.d(TAG, "Chart elements not found, showing fallback: $message")
-                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in updateMonthlyGraph: ${e.message}", e)
-        }
-    }
-
-    private fun updateMonthlyGraphTitle(newTitle: String) {
-        try {
-            val titleView = findViewById<TextView>(R.id.monthly_graph_title)
-            titleView?.text = newTitle
-        } catch (e: Exception) {
-            Log.e(TAG, "Error updating monthly graph title: ${e.message}", e)
-        }
-    }
-
-    private fun updateCategoryDisplay() {
-        try {
-            val gridLayout = findViewById<android.widget.GridLayout>(R.id.categories_grid)
-            if (gridLayout == null) {
-                Log.e(TAG, "categories_grid not found for updating display")
-                return
-            }
-
-            val categoryNames = listOf("TOILETRIES", "CAR", "WATER & LIGHTS", "GROCERIES", "CLOTHES", "OTHER")
-
-            for (i in 0 until minOf(gridLayout.childCount, categoryNames.size)) {
-                try {
-                    val categoryFrame = gridLayout.getChildAt(i) as? FrameLayout
-                    val textView = categoryFrame?.getChildAt(0) as? TextView
-
-                    if (textView != null) {
-                        val categoryName = categoryNames[i]
-                        val amount = categorySpending[categoryName] ?: 0.0
-
-                        val displayText = if (amount > 0) {
-                            "$categoryName\nR${formatAmount(amount)}"
-                        } else {
-                            categoryName
-                        }
-                        textView.text = displayText
-
-                        // Add visual indicator for spending level
-                        val color = categoryColors[categoryName] ?: categoryColors["OTHER"]!!
-                        if (amount > 0) {
-                            categoryFrame?.setBackgroundColor(Color.parseColor(color + "33")) // 20% opacity
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error updating category display for index $i: ${e.message}", e)
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in updateCategoryDisplay: ${e.message}", e)
         }
     }
 
     private fun formatAmount(amount: Double): String {
         return try {
             when {
+                amount >= 1000000 -> String.format("%.1fM", amount / 1000000)
                 amount >= 1000 -> String.format("%.1fk", amount / 1000)
                 amount >= 100 -> String.format("%.0f", amount)
                 amount > 0 -> String.format("%.2f", amount)
                 else -> "0"
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error formatting amount: ${e.message}", e)
             "0"
-        }
-    }
-
-    private fun dpToPx(dp: Int): Int {
-        return try {
-            val density = resources.displayMetrics.density
-            (dp * density).toInt()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error converting dp to px: ${e.message}", e)
-            dp // Return original value as fallback
-        }
-    }
-
-    fun refreshData() {
-        try {
-            loadDataFromFirebase()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error refreshing data: ${e.message}", e)
         }
     }
 
@@ -521,10 +699,22 @@ class Categories : AppCompatActivity() {
         super.onResume()
         try {
             if (auth.currentUser != null) {
-                loadDataFromFirebase()
+                // Reload data when returning to activity to catch any new expenses/incomes
+                resetDataLoadingFlags()
+                showLoadingState()
+                loadAllData()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in onResume: ${e.message}", e)
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        try {
+            // Clean up any listeners if needed
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in onDestroy: ${e.message}", e)
         }
     }
 }

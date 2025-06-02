@@ -2,12 +2,16 @@ package com.fake.wastingmoney
 
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.BitmapFactory
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.util.Log
+import android.util.Base64
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.ImageView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AlertDialog
@@ -23,7 +27,7 @@ class Transaction : AppCompatActivity() {
     private lateinit var transactionsContainer: LinearLayout
     private lateinit var tvNoTransactions: TextView
     private lateinit var tvTotalTransactions: TextView
-    private lateinit var tvNetTotal: TextView // New TextView for net total
+    private lateinit var tvNetTotal: TextView
     private lateinit var menuIcon: LinearLayout
 
     private val transactionsList = mutableListOf<TransactionItem>()
@@ -256,10 +260,7 @@ class Transaction : AppCompatActivity() {
             "📊 Dashboard",
             "💰 Add Income",
             "💸 Add Expense",
-            "🎯 Budget Goal",
             "📂 Categories",
-            "🔧 Manage Categories",
-            "📋 Category Details",
             "📝 Transactions",
             "🚪 Logout"
         )
@@ -272,18 +273,16 @@ class Transaction : AppCompatActivity() {
                     1 -> navigateToDashboard()
                     2 -> navigateToAddIncome()
                     3 -> navigateToAddExpense()
-                    4 -> navigateToBudgetGoal()
-                    5 -> navigateToCategories()
-                    6 -> navigateToManageCategories()
-                    7 -> navigateToCategoryDetail()
-                    8 -> navigateToTransactions()
-                    9 -> logout()
+                    4 -> navigateToCategories()
+                    5 -> navigateToTransactions()
+                    6 -> logout()
                 }
             }
             .setNegativeButton("Cancel", null)
             .show()
     }
 
+    // Navigation methods remain the same as in original code...
     private fun navigateToHome() {
         try {
             val intent = Intent(this, Home::class.java)
@@ -393,19 +392,13 @@ class Transaction : AppCompatActivity() {
 
     private fun performLogout() {
         try {
-            // Sign out from Firebase Auth
             auth.signOut()
-
-            // Clear any saved user session data
             val sharedPrefs = getSharedPreferences("user_session", MODE_PRIVATE)
             sharedPrefs.edit().clear().apply()
-
-            // Navigate to MainActivity and clear the back stack
             val intent = Intent(this, MainActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             startActivity(intent)
             finish()
-
             Toast.makeText(this, "Logged out successfully", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Log.e(TAG, "Error during logout: ${e.message}", e)
@@ -444,7 +437,7 @@ class Transaction : AppCompatActivity() {
                 Log.d(TAG, "Income snapshot received. Exists: ${snapshot.exists()}, Children count: ${snapshot.childrenCount}")
 
                 transactionsList.removeAll { it.type == "Income" }
-                totalIncome = 0.0 // Reset income total
+                totalIncome = 0.0
 
                 for (incomeSnapshot in snapshot.children) {
                     try {
@@ -457,10 +450,11 @@ class Transaction : AppCompatActivity() {
                                 category = it.source,
                                 date = it.date,
                                 timestamp = it.timestamp,
-                                type = "Income"
+                                type = "Income",
+                                documentBase64 = it.documentBase64 // Instead of null// Income typically doesn't have documents
                             )
                             transactionsList.add(transactionItem)
-                            totalIncome += it.amount // Add to total income
+                            totalIncome += it.amount
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error parsing income: ${e.message}", e)
@@ -487,7 +481,7 @@ class Transaction : AppCompatActivity() {
                 Log.d(TAG, "Expense snapshot received. Exists: ${snapshot.exists()}, Children count: ${snapshot.childrenCount}")
 
                 transactionsList.removeAll { it.type == "Expense" }
-                totalExpenses = 0.0 // Reset expenses total
+                totalExpenses = 0.0
 
                 for (expenseSnapshot in snapshot.children) {
                     try {
@@ -500,10 +494,11 @@ class Transaction : AppCompatActivity() {
                                 category = it.category,
                                 date = it.date,
                                 timestamp = it.timestamp,
-                                type = "Expense"
+                                type = "Expense",
+                                documentBase64 = it.documentBase64 // Include the base64 document
                             )
                             transactionsList.add(transactionItem)
-                            totalExpenses += it.amount // Add to total expenses
+                            totalExpenses += it.amount
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error parsing expense: ${e.message}", e)
@@ -541,13 +536,10 @@ class Transaction : AppCompatActivity() {
 
     private fun updateTotalDisplays() {
         try {
-            // Calculate net total (income - expenses)
             val netTotal = totalIncome - totalExpenses
 
-            // Update transaction count
             tvTotalTransactions.text = "TOTAL TRANSACTIONS (${transactionsList.size})"
 
-            // Update net total with appropriate color
             val netTotalText = if (netTotal >= 0) {
                 "Net Total: +R${String.format("%.2f", netTotal)}"
             } else {
@@ -556,11 +548,10 @@ class Transaction : AppCompatActivity() {
 
             tvNetTotal.text = netTotalText
 
-            // Set color based on positive/negative
             val color = if (netTotal >= 0) {
-                Color.parseColor("#4CAF50") // Green for positive
+                Color.parseColor("#4CAF50")
             } else {
-                Color.parseColor("#FF5722") // Red for negative
+                Color.parseColor("#FF5722")
             }
             tvNetTotal.setTextColor(color)
 
@@ -599,6 +590,16 @@ class Transaction : AppCompatActivity() {
                 setMargins(0, 8, 0, 8)
             }
             setBackgroundColor(Color.parseColor("#2d5a47"))
+        }
+
+        // Main content container
+        val contentLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
+            )
         }
 
         val leftLayout = LinearLayout(this).apply {
@@ -665,10 +666,79 @@ class Transaction : AppCompatActivity() {
         rightLayout.addView(tvCategory)
         rightLayout.addView(tvDate)
 
-        transactionLayout.addView(leftLayout)
-        transactionLayout.addView(rightLayout)
+        contentLayout.addView(leftLayout)
+        contentLayout.addView(rightLayout)
+
+        // Add image view for documents (if available)
+        val imageView = ImageView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(80, 80).apply {
+                setMargins(16, 0, 0, 0)
+            }
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            setBackgroundColor(Color.parseColor("#1a4c3a"))
+            setPadding(4, 4, 4, 4)
+        }
+
+        // Load base64 image if available
+        if (!transaction.documentBase64.isNullOrEmpty()) {
+            try {
+                val bitmap = decodeBase64ToBitmap(transaction.documentBase64)
+                if (bitmap != null) {
+                    imageView.setImageBitmap(bitmap)
+                    imageView.visibility = View.VISIBLE
+
+                    // Add click listener to view full image
+                    imageView.setOnClickListener {
+                        showFullImageDialog(bitmap)
+                    }
+                } else {
+                    // Show placeholder for failed image decode
+                    imageView.setBackgroundColor(Color.parseColor("#666666"))
+                    imageView.visibility = View.VISIBLE
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error decoding base64 image: ${e.message}", e)
+                imageView.setBackgroundColor(Color.parseColor("#666666"))
+                imageView.visibility = View.VISIBLE
+            }
+        } else {
+            imageView.visibility = View.GONE
+        }
+
+        transactionLayout.addView(contentLayout)
+        transactionLayout.addView(imageView)
 
         return transactionLayout
+    }
+
+    /**
+     * Decode base64 string to bitmap
+     */
+    private fun decodeBase64ToBitmap(base64String: String): Bitmap? {
+        return try {
+            val decodedBytes = Base64.decode(base64String, Base64.DEFAULT)
+            BitmapFactory.decodeByteArray(decodedBytes, 0, decodedBytes.size)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error decoding base64 to bitmap: ${e.message}", e)
+            null
+        }
+    }
+
+    /**
+     * Show full image in dialog
+     */
+    private fun showFullImageDialog(bitmap: Bitmap) {
+        val imageView = ImageView(this).apply {
+            setImageBitmap(bitmap)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setPadding(16, 16, 16, 16)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Document Image")
+            .setView(imageView)
+            .setPositiveButton("Close", null)
+            .show()
     }
 
     private fun clearTransactionViews() {
@@ -705,6 +775,7 @@ class Transaction : AppCompatActivity() {
     }
 }
 
+// Updated TransactionItem data class to include documentBase64
 data class TransactionItem(
     val id: String = "",
     val amount: Double = 0.0,
@@ -712,5 +783,6 @@ data class TransactionItem(
     val category: String = "",
     val date: String = "",
     val timestamp: Long = 0L,
-    val type: String = ""
+    val type: String = "",
+    val documentBase64: String? = null // Add this field for base64 image data
 )

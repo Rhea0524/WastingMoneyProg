@@ -10,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
+import android.widget.Button
 
 class Home : AppCompatActivity() {
 
@@ -20,9 +21,8 @@ class Home : AppCompatActivity() {
     private lateinit var cardAddExpense: CardView
     private lateinit var cardCategories: CardView
     private lateinit var cardTransactions: CardView
-    private lateinit var cardBudgetGoal: CardView
     private lateinit var cardDashboard: CardView
-    private lateinit var cardLogout: CardView
+    private lateinit var btnLogout: Button
 
     private lateinit var auth: FirebaseAuth
 
@@ -43,9 +43,8 @@ class Home : AppCompatActivity() {
         cardAddExpense = findViewById(R.id.cardAddExpense)
         cardCategories = findViewById(R.id.cardCategories)
         cardTransactions = findViewById(R.id.cardTransactions)
-        cardBudgetGoal = findViewById(R.id.cardBudgetGoal)
         cardDashboard = findViewById(R.id.cardDashboard)
-        cardLogout = findViewById(R.id.cardLogout)
+        btnLogout = findViewById(R.id.cardLogout) // Note: ID is cardLogout in XML but it's a Button
 
         // Set personalized welcome message if user is logged in
         val currentUser = auth.currentUser
@@ -69,19 +68,14 @@ class Home : AppCompatActivity() {
             startActivity(Intent(this, Transaction::class.java))
         }
 
-        cardBudgetGoal.setOnClickListener {
-            startActivity(Intent(this, BudgetGoal::class.java))
-        }
-
         cardDashboard.setOnClickListener {
             // If you have DashboardActivity, uncomment the line below:
             startActivity(Intent(this, DashboardActivity::class.java))
 
             // Temporary placeholder - remove this when you have the actual activity
-
         }
 
-        cardLogout.setOnClickListener {
+        btnLogout.setOnClickListener {
             logout()
         }
 

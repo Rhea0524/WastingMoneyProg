@@ -10,6 +10,7 @@ import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.Button
 import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -26,6 +27,7 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
+import android.util.Base64
 
 class AddExpense : AppCompatActivity() {
 
@@ -35,6 +37,10 @@ class AddExpense : AppCompatActivity() {
     private lateinit var btnDatePicker: Button
     private lateinit var btnUploadDocument: Button
     private lateinit var btnSaveExpense: Button
+    private lateinit var menuIcon: LinearLayout // Added menu icon
+
+    // Added Firebase auth for menu functionality
+    private lateinit var auth: FirebaseAuth
 
     private val calendar = Calendar.getInstance()
     private val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
@@ -104,14 +110,21 @@ class AddExpense : AppCompatActivity() {
 
         try {
             setContentView(R.layout.activity_add_expense)
+            initializeFirebase() // Initialize Firebase Auth
             initializeViews()
             setupCategoryDropdown()
             setupDatePicker()
             setupClickListeners()
+            setupMenuListener() // Setup menu functionality
         } catch (e: Exception) {
             Toast.makeText(this, "Error loading AddExpense: ${e.message}", Toast.LENGTH_LONG).show()
             finish()
         }
+    }
+
+    // Initialize Firebase Auth
+    private fun initializeFirebase() {
+        auth = FirebaseAuth.getInstance()
     }
 
     private fun initializeViews() {
@@ -122,9 +135,87 @@ class AddExpense : AppCompatActivity() {
             btnDatePicker = findViewById(R.id.btn_date_picker)
             btnUploadDocument = findViewById(R.id.btn_upload_document)
             btnSaveExpense = findViewById(R.id.btn_save_expense)
+            menuIcon = findViewById(R.id.menuIcon) // Initialize menu icon
         } catch (e: Exception) {
             throw Exception("Failed to initialize views. Please check your layout file has all required IDs: ${e.message}")
         }
+    }
+
+    // Setup menu listener
+    private fun setupMenuListener() {
+        menuIcon.setOnClickListener {
+            showMenuDialog()
+        }
+    }
+
+    // Show menu dialog with same options as AddIncome
+    private fun showMenuDialog() {
+        val menuOptions = arrayOf(
+            "🏠 Home",
+            "📊 Dashboard",
+            "💰 Add Income",
+            "💸 Add Expense",
+            "📂 Categories",
+            "📝 Transactions",
+            "🚪 Logout"
+        )
+
+        AlertDialog.Builder(this)
+            .setTitle("Navigation Menu")
+            .setItems(menuOptions) { _, which ->
+                when (which) {
+                    0 -> navigateToHome()
+                    1 -> navigateToDashboard()
+                    2 -> navigateToAddIncome()
+                    3 -> Toast.makeText(this, "You are already on Add Expense", Toast.LENGTH_SHORT).show()
+                    4 -> navigateToCategories()
+                    5 -> navigateToTransactions()
+                    6 -> logout()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    // Navigation methods
+    private fun navigateToHome() {
+        startActivity(Intent(this, Home::class.java))
+        finish()
+    }
+
+    private fun navigateToDashboard() {
+        startActivity(Intent(this, DashboardActivity::class.java))
+        finish()
+    }
+
+    private fun navigateToAddIncome() {
+        startActivity(Intent(this, AddIncome::class.java))
+        finish()
+    }
+
+    private fun navigateToCategories() {
+        startActivity(Intent(this, Categories::class.java))
+        finish()
+    }
+
+    private fun navigateToTransactions() {
+        startActivity(Intent(this, Transaction::class.java))
+        finish()
+    }
+
+    private fun logout() {
+        AlertDialog.Builder(this)
+            .setTitle("Logout")
+            .setMessage("Are you sure you want to logout?")
+            .setPositiveButton("Logout") { _, _ ->
+                auth.signOut()
+                val intent = Intent(this, MainActivity::class.java)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                startActivity(intent)
+                finish()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun setupClickListeners() {
@@ -389,7 +480,7 @@ class AddExpense : AppCompatActivity() {
             category = category,
             date = date,
             timestamp = System.currentTimeMillis(),
-            documentUrl = null // Will be updated if document upload succeeds
+            documentBase64 = null // Will be updated if document upload succeeds
         )
 
         // Save to Firebase (upload document first if selected)
@@ -454,58 +545,33 @@ class AddExpense : AppCompatActivity() {
     }
 
     private fun uploadDocumentThenSave(uid: String, expense: Expense) {
-        // Validate URI before upload
         if (selectedDocumentUri == null) {
             Toast.makeText(this, "No document selected", Toast.LENGTH_SHORT).show()
             resetButtonState()
             return
         }
 
-        val file = File(selectedDocumentUri!!.path!!)
-        if (!file.exists()) {
-            Toast.makeText(this, "Selected file no longer exists", Toast.LENGTH_SHORT).show()
-            resetButtonState()
-            return
-        }
-
         try {
-            val fileExtension = getFileExtensionFromFile(file)
-            val fileName = "${System.currentTimeMillis()}_expense_document.$fileExtension"
-            val storageRef = FirebaseStorage.getInstance().reference
-                .child("expense_documents")
-                .child(uid)
-                .child(fileName)
-
-            // Show loading state
-            btnSaveExpense.isEnabled = false
-            btnSaveExpense.text = "Uploading..."
-
-            // Upload file using FileInputStream for better reliability
-            val fileStream = FileInputStream(file)
-            val uploadTask = storageRef.putStream(fileStream)
-
-            uploadTask.addOnProgressListener { taskSnapshot ->
-                val progress = (100.0 * taskSnapshot.bytesTransferred / taskSnapshot.totalByteCount)
-                btnSaveExpense.text = "Uploading... ${progress.toInt()}%"
+            val inputStream = contentResolver.openInputStream(selectedDocumentUri!!)
+            if (inputStream == null) {
+                Toast.makeText(this, "Failed to open selected file", Toast.LENGTH_SHORT).show()
+                resetButtonState()
+                return
             }
-                .addOnSuccessListener {
-                    fileStream.close()
-                    storageRef.downloadUrl.addOnSuccessListener { uri ->
-                        // Update expense with document URL
-                        val expenseWithDoc = expense.copy(documentUrl = uri.toString())
-                        saveToFirebase(uid, expenseWithDoc)
-                    }.addOnFailureListener { exception ->
-                        Toast.makeText(this, "Failed to get document URL: ${exception.message}", Toast.LENGTH_LONG).show()
-                        resetButtonState()
-                    }
-                }
-                .addOnFailureListener { exception ->
-                    fileStream.close()
-                    Toast.makeText(this, "Document upload failed: ${exception.message}", Toast.LENGTH_LONG).show()
-                    resetButtonState()
-                }
+
+            val bytes = inputStream.readBytes()
+            inputStream.close()
+
+            val base64String = Base64.encodeToString(bytes, Base64.DEFAULT)
+
+            // Attach the base64 string to the expense
+            val expenseWithDoc = expense.copy(documentBase64 = base64String)
+
+            // Save to Firebase
+            saveToFirebase(uid, expenseWithDoc)
+
         } catch (e: Exception) {
-            Toast.makeText(this, "Error preparing file for upload: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Error reading file: ${e.message}", Toast.LENGTH_LONG).show()
             resetButtonState()
         }
     }

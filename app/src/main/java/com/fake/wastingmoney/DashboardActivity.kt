@@ -757,15 +757,14 @@ class DashboardActivity : AppCompatActivity() {
         chartContainer.addView(messageLayout)
     }
 
+
     private fun showMenuDialog() {
         val menuOptions = arrayOf(
             "🏠 Home",
             "📊 Dashboard",
             "💰 Add Income",
             "💸 Add Expense",
-            "🎯 Budget Goal",
             "📂 Categories",
-            "Category details",
             "📝 Transactions",
             "🚪 Logout"
         )
@@ -778,11 +777,9 @@ class DashboardActivity : AppCompatActivity() {
                     1 -> Toast.makeText(this, "You are already on Dashboard", Toast.LENGTH_SHORT).show()
                     2 -> navigateToAddIncome()
                     3 -> navigateToAddExpense()
-                    4 -> navigateToBudgetGoal()
-                    5 -> navigateToCategories()
-                //    6 -> navigateToCategoryDetail()
-                    6 -> navigateToTransactions()
-                    7 -> logout()
+                    4 -> navigateToCategories()
+                    5 -> navigateToTransactions()
+                    6 -> logout()
                 }
             }
             .setNegativeButton("Cancel", null)
@@ -810,9 +807,9 @@ class DashboardActivity : AppCompatActivity() {
         startActivity(Intent(this, Categories::class.java))
     }
 
-  //  private fun navigateToCategoryDetail() {
-  //      startActivity(Intent(this, Categories::class.java))
- //   }
+    //  private fun navigateToCategoryDetail() {
+    //      startActivity(Intent(this, Categories::class.java))
+    //   }
 
     private fun navigateToTransactions() {
         startActivity(Intent(this, Transaction::class.java))
