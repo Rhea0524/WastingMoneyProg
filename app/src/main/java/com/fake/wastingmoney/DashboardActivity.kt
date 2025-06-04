@@ -57,10 +57,16 @@ class DashboardActivity : AppCompatActivity() {
     }
 
     private fun initializeViews() {
-        chartContainer = findViewById(R.id.chartContainer)
+        chartContainer = findViewById(R.id.categoriesContainer) // Changed from chartContainer to categoriesContainer
         monthSpinner = findViewById(R.id.monthSpinner)
         setGoalButton = findViewById(R.id.setGoalButton)
-        menuIcon = findViewById(R.id.menuIcon)
+        menuIcon = findViewById(R.id.menuButton) // Changed from menuIcon to menuButton
+
+        // Add the missing addExpenseButton
+        val addExpenseButton: Button = findViewById(R.id.addExpenseButton)
+        addExpenseButton.setOnClickListener {
+            navigateToAddExpense()
+        }
     }
 
     private fun initializeFirebase() {
@@ -244,12 +250,23 @@ class DashboardActivity : AppCompatActivity() {
         categoryExpenses.clear()
         categoryIncome.clear()
 
-        // Load both incomes and expenses
-        loadIncomesForMonth(currentUser.uid, selectedMonth)
-        loadExpensesForMonth(currentUser.uid, selectedMonth)
+        // Use counters to track completion
+        var loadingCount = 2 // We're loading 2 things: incomes and expenses
+
+        fun checkAndUpdateDisplay() {
+            loadingCount--
+            if (loadingCount == 0) {
+                // Both incomes and expenses are loaded, now update display
+                updateChartDisplay()
+            }
+        }
+
+// Load incomes and expenses with completion callbacks
+        loadIncomesForMonth(currentUser.uid, selectedMonth) { checkAndUpdateDisplay() }
+        loadExpensesForMonth(currentUser.uid, selectedMonth) { checkAndUpdateDisplay() }
     }
 
-    private fun loadIncomesForMonth(uid: String, selectedMonth: Int) {
+    private fun loadIncomesForMonth(uid: String, selectedMonth: Int, onComplete: () -> Unit) {
         val incomesRef = database.getReference("incomes").child(uid)
 
         incomesRef.addListenerForSingleValueEvent(object : ValueEventListener {
@@ -281,17 +298,19 @@ class DashboardActivity : AppCompatActivity() {
                 Log.d(TAG, "Final income by category: $categoryIncome")
 
                 // Update chart after loading incomes
-                updateChartDisplay()
+                onComplete() // Call completion callback instead of updateChartDisplay
             }
 
             override fun onCancelled(error: DatabaseError) {
                 Log.e(TAG, "Failed to load incomes: ${error.message}")
                 Toast.makeText(this@DashboardActivity, "Failed to load income data", Toast.LENGTH_SHORT).show()
+                onComplete() // Still call completion even on error
             }
+
         })
     }
 
-    private fun loadExpensesForMonth(uid: String, selectedMonth: Int) {
+    private fun loadExpensesForMonth(uid: String, selectedMonth: Int, onComplete: () -> Unit) {
         val expensesRef = database.getReference("expenses").child(uid)
 
         expensesRef.addListenerForSingleValueEvent(object : ValueEventListener {
@@ -323,12 +342,13 @@ class DashboardActivity : AppCompatActivity() {
                 Log.d(TAG, "Final expenses by category: $categoryExpenses")
 
                 // Update chart after loading expenses
-                updateChartDisplay()
+                onComplete() // Call completion callback instead of updateChartDisplay
             }
 
             override fun onCancelled(error: DatabaseError) {
                 Log.e(TAG, "Failed to load expenses: ${error.message}")
                 Toast.makeText(this@DashboardActivity, "Failed to load expense data", Toast.LENGTH_SHORT).show()
+                onComplete() // Still call completion even on error
             }
         })
     }
@@ -383,10 +403,11 @@ class DashboardActivity : AppCompatActivity() {
     }
 
     private fun updateChartDisplay() {
-        chartContainer.removeAllViews()
+        // Clear only the dynamic category views, not the static legend
+        val categoriesContainer = findViewById<LinearLayout>(R.id.categoriesContainer)
+        categoriesContainer.removeAllViews()
 
-        // Show summary at the top
-        createSummaryView()
+
 
         if (categoryExpenses.isEmpty() && categoryIncome.isEmpty()) {
             showNoDataMessage()
@@ -396,7 +417,8 @@ class DashboardActivity : AppCompatActivity() {
         // Create charts for expense categories with goals
         if (categoryExpenses.isNotEmpty()) {
             addSectionHeader("EXPENSES")
-            for ((category, expenseAmount) in categoryExpenses.toList().sortedByDescending { it.second }) {
+            for ((category, expenseAmount) in categoryExpenses.toList()
+                .sortedByDescending { it.second }) {
                 val goalData = categoryGoals[category.uppercase()]
                 createCategoryChartWithGoals(category, expenseAmount, goalData, "Expense")
             }
@@ -405,122 +427,44 @@ class DashboardActivity : AppCompatActivity() {
         // Create charts for income categories
         if (categoryIncome.isNotEmpty()) {
             addSectionHeader("INCOME")
-            for ((category, incomeAmount) in categoryIncome.toList().sortedByDescending { it.second }) {
+            for ((category, incomeAmount) in categoryIncome.toList()
+                .sortedByDescending { it.second }) {
                 createIncomeChart(category, incomeAmount)
             }
         }
-
-        // Show goal summary if goals exist
-        if (categoryGoals.isNotEmpty()) {
-            addSectionHeader("GOAL SUMMARY")
-            createGoalSummaryView()
-        }
     }
 
-    private fun createSummaryView() {
-        val summaryLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(0, 0, 0, 24)
-            }
-            setBackgroundColor(Color.parseColor("#2D5A47"))
-            setPadding(16, 16, 16, 16)
-        }
 
-        val totalIncome = categoryIncome.values.sum()
-        val totalExpenses = categoryExpenses.values.sum()
-        val netAmount = totalIncome - totalExpenses
 
-        val summaryText = TextView(this).apply {
-            text = """
-                Monthly Summary
-                Income: R${String.format("%.2f", totalIncome)}
-                Expenses: R${String.format("%.2f", totalExpenses)}
-                Net: ${if (netAmount >= 0) "+" else "-"}R${String.format("%.2f", Math.abs(netAmount))}
-            """.trimIndent()
-            setTextColor(Color.WHITE)
-            textSize = 14f
-            setTypeface(null, android.graphics.Typeface.BOLD)
-        }
 
-        summaryLayout.addView(summaryText)
-        chartContainer.addView(summaryLayout)
-    }
 
-    private fun createGoalSummaryView() {
-        val summaryLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(0, 0, 0, 24)
-            }
-            setBackgroundColor(Color.parseColor("#3A4D5A"))
-            setPadding(16, 16, 16, 16)
-        }
 
-        val titleText = TextView(this).apply {
-            text = "Goal Performance"
-            setTextColor(Color.WHITE)
-            textSize = 16f
-            setTypeface(null, android.graphics.Typeface.BOLD)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(0, 0, 0, 16)
-            }
-        }
-
-        summaryLayout.addView(titleText)
-
-        for ((category, goalData) in categoryGoals) {
-            val actualExpense = categoryExpenses[category] ?: 0.0
-            val status = when {
-                actualExpense <= goalData.minGoal -> "✅ Under Min Goal"
-                actualExpense <= goalData.maxGoal -> "⚠️ Within Range"
-                else -> "❌ Over Max Goal"
-            }
-
-            val goalText = TextView(this).apply {
-                text = """
-                    $category: $status
-                    Spent: R${String.format("%.2f", actualExpense)} | Min: R${String.format("%.2f", goalData.minGoal)} | Max: R${String.format("%.2f", goalData.maxGoal)}
-                """.trimIndent()
-                setTextColor(Color.WHITE)
-                textSize = 12f
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply {
-                    setMargins(0, 0, 0, 8)
-                }
-            }
-
-            summaryLayout.addView(goalText)
-        }
-
-        chartContainer.addView(summaryLayout)
-    }
 
     private fun addSectionHeader(title: String) {
+        val headerLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 24, 0, 16)
+            }
+            setBackgroundColor(Color.parseColor("#2196F3"))
+            setPadding(24, 16, 24, 16)
+            elevation = 1f
+        }
+
         val headerText = TextView(this).apply {
             text = title
             setTextColor(Color.WHITE)
             textSize = 16f
             setTypeface(null, android.graphics.Typeface.BOLD)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                setMargins(0, 16, 0, 8)
-            }
         }
-        chartContainer.addView(headerText)
+
+        headerLayout.addView(headerText)
+
+        val categoriesContainer = findViewById<LinearLayout>(R.id.categoriesContainer)
+        categoriesContainer.addView(headerLayout)
     }
 
     private fun createIncomeChart(category: String, amount: Double) {
@@ -532,63 +476,103 @@ class DashboardActivity : AppCompatActivity() {
             ).apply {
                 setMargins(0, 0, 0, 16)
             }
+            setBackgroundColor(Color.WHITE)
+            setPadding(24, 24, 24, 24)
+            elevation = 1f
+            isClickable = true
+            isFocusable = true
+            foreground = getDrawable(android.R.drawable.list_selector_background)
         }
 
-        // Category title
+        // Category title with emoji
+        val emoji = when(category.uppercase()) {
+            "SALARY" -> "💼"
+            "GIFT" -> "🎁"
+            "INVESTMENT" -> "📈"
+            "OTHER" -> "💰"
+            else -> "💰"
+        }
+
+        val headerLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 0, 0, 16)
+            }
+        }
+
         val titleTextView = TextView(this).apply {
-            text = category.uppercase()
-            setTextColor(Color.WHITE)
+            text = "$emoji ${category.uppercase()}"
+            setTextColor(Color.parseColor("#1A1A1A"))
+            textSize = 18f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
+            )
+        }
+
+        val amountLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = android.view.Gravity.END
+        }
+
+        val amountText = TextView(this).apply {
+            text = "R${String.format("%.2f", amount)}"
+            setTextColor(Color.parseColor("#1A1A1A"))
+            textSize = 16f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        }
+
+        amountLayout.addView(amountText)
+        headerLayout.addView(titleTextView)
+        headerLayout.addView(amountLayout)
+
+        // Progress bar for visual consistency
+        val progressFrame = FrameLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                8.dpToPx()
+            )
+            setBackgroundColor(Color.parseColor("#E0E0E0"))
+        }
+
+        // Calculate bar width based on amount
+        val maxAmount = categoryIncome.values.maxOrNull() ?: amount
+        val progressPercentage = if (maxAmount > 0) (amount / maxAmount) else 0.0
+
+        val progressView = View(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                (resources.displayMetrics.widthPixels * 0.8 * progressPercentage).toInt(),
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(Color.parseColor("#4CAF50"))
+        }
+
+        progressFrame.addView(progressView)
+
+        val statusText = TextView(this).apply {
+            text = "✓ Income received"
+            setTextColor(Color.parseColor("#4CAF50"))
             textSize = 12f
             setTypeface(null, android.graphics.Typeface.BOLD)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                setMargins(0, 0, 0, 8)
-            }
-        }
-
-        // Chart container
-        val chartFrame = FrameLayout(this).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                48
-            )
-        }
-
-        // Calculate bar width based on amount
-        val maxWidth = resources.displayMetrics.widthPixels - (64 * resources.displayMetrics.density).toInt()
-        val maxAmount = categoryIncome.values.maxOrNull() ?: amount
-        val barWidth = if (maxAmount > 0) {
-            ((amount / maxAmount) * maxWidth * 0.8).toInt()
-        } else 0
-
-        // Income bar (always green)
-        val incomeBar = View(this).apply {
-            layoutParams = FrameLayout.LayoutParams(barWidth, FrameLayout.LayoutParams.MATCH_PARENT)
-            setBackgroundColor(Color.parseColor("#4CAF50")) // Green for income
-        }
-
-        chartFrame.addView(incomeBar)
-
-        // Amount label
-        val amountText = TextView(this).apply {
-            text = "R${String.format("%.2f", amount)}"
-            setTextColor(Color.parseColor("#CCCCCC"))
-            textSize = 10f
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
                 setMargins(0, 8, 0, 0)
             }
         }
 
-        categoryLayout.addView(titleTextView)
-        categoryLayout.addView(chartFrame)
-        categoryLayout.addView(amountText)
+        categoryLayout.addView(headerLayout)
+        categoryLayout.addView(progressFrame)
+        categoryLayout.addView(statusText)
 
-        chartContainer.addView(categoryLayout)
+        val categoriesContainer = findViewById<LinearLayout>(R.id.categoriesContainer)
+        categoriesContainer.addView(categoryLayout)
     }
 
     private fun createCategoryChartWithGoals(category: String, actualAmount: Double, goalData: GoalData?, type: String) {
@@ -600,123 +584,190 @@ class DashboardActivity : AppCompatActivity() {
             ).apply {
                 setMargins(0, 0, 0, 16)
             }
+            setBackgroundColor(Color.WHITE)
+            setPadding(24, 24, 24, 24)
+            elevation = 1f
+            isClickable = true
+            isFocusable = true
+            foreground = getDrawable(android.R.drawable.list_selector_background)
         }
 
-        // Category title with goal status
-        val goalStatus = if (goalData != null) {
-            when {
-                actualAmount <= goalData.minGoal -> " ✅"
-                actualAmount <= goalData.maxGoal -> " ⚠️"
-                else -> " ❌"
+        // Category title with goal status and emoji
+        val emoji = when(category.uppercase()) {
+            "UTILITIES" -> "⚡"
+            "CLOTHES" -> "👕"
+            "TRANSPORT", "TRANSPORTATION" -> "🚗"
+            "TOILETRIES" -> "🧴"
+            "GROCERIES" -> "🛒"
+            "ENTERTAINMENT" -> "🎬"
+            "HEALTHCARE" -> "🏥"
+            else -> "💰"
+        }
+
+        val headerLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 0, 0, 16)
             }
-        } else ""
+        }
 
         val titleTextView = TextView(this).apply {
-            text = "${category.uppercase()}$goalStatus"
-            setTextColor(Color.WHITE)
+            text = "$emoji ${category.uppercase()}"
+            setTextColor(Color.parseColor("#1A1A1A"))
+            textSize = 18f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            layoutParams = LinearLayout.LayoutParams(
+                0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                1f
+            )
+        }
+
+        val amountLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = android.view.Gravity.END
+        }
+
+        val amountText = TextView(this).apply {
+            text = if (goalData != null) {
+                "R${String.format("%.2f", actualAmount)} / R${String.format("%.2f", goalData.maxGoal)}"
+            } else {
+                "R${String.format("%.2f", actualAmount)}"
+            }
+            setTextColor(Color.parseColor("#1A1A1A"))
+            textSize = 16f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        }
+
+        val remainingText = TextView(this).apply {
+            text = if (goalData != null) {
+                val remaining = goalData.maxGoal - actualAmount
+                if (remaining >= 0) {
+                    "R${String.format("%.2f", remaining)} remaining"
+                } else {
+                    "R${String.format("%.2f", Math.abs(remaining))} over budget"
+                }
+            } else {
+                "No goal set"
+            }
+            setTextColor(
+                if (goalData != null && actualAmount <= goalData.maxGoal)
+                    Color.parseColor("#4CAF50")
+                else
+                    Color.parseColor("#FF5722")
+            )
+            textSize = 12f
+        }
+
+        amountLayout.addView(amountText)
+        amountLayout.addView(remainingText)
+        headerLayout.addView(titleTextView)
+        headerLayout.addView(amountLayout)
+
+        // Progress bar - FIXED VERSION
+        val progressFrame = FrameLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                8.dpToPx()
+            )
+            setBackgroundColor(Color.parseColor("#E0E0E0"))
+        }
+
+        if (goalData != null) {
+            // Calculate progress percentage (cap at 100% for the main bar)
+            val progressPercentage = (actualAmount / goalData.maxGoal).coerceAtMost(1.0)
+
+            // Determine color based on goal status
+            val progressColor = when {
+                actualAmount <= goalData.minGoal -> Color.parseColor("#4CAF50") // Green - under min goal
+                actualAmount <= goalData.maxGoal -> Color.parseColor("#FF9800") // Orange - between min and max
+                else -> Color.parseColor("#4CAF50") // Green for the budget portion, red will be added for overspend
+            }
+
+            // Main progress view (up to 100% of budget)
+            val progressView = View(this).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    (resources.displayMetrics.widthPixels * 0.8 * progressPercentage).toInt(), // Calculate actual pixel width
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+                setBackgroundColor(progressColor)
+            }
+            progressFrame.addView(progressView)
+
+            // If over budget, add red overspend indicator
+            if (actualAmount > goalData.maxGoal) {
+                val overSpendAmount = actualAmount - goalData.maxGoal
+                val overSpendPercentage = (overSpendAmount / goalData.maxGoal).coerceAtMost(0.3) // Cap overspend display at 30%
+
+                val overSpendView = View(this).apply {
+                    layoutParams = FrameLayout.LayoutParams(
+                        (resources.displayMetrics.widthPixels * 0.8 * overSpendPercentage).toInt(),
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                    ).apply {
+                        // Position it after the main progress bar
+                        leftMargin = (resources.displayMetrics.widthPixels * 0.8).toInt()
+                    }
+                    setBackgroundColor(Color.parseColor("#FF5722")) // Red for overspend
+                }
+                progressFrame.addView(overSpendView)
+            }
+        } else {
+            // No goal set - show simple progress based on category average or just a default
+            val maxExpense = categoryExpenses.values.maxOrNull() ?: actualAmount
+            val progressPercentage = if (maxExpense > 0) (actualAmount / maxExpense) else 0.0
+
+            val progressView = View(this).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    (resources.displayMetrics.widthPixels * 0.8 * progressPercentage).toInt(),
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+                setBackgroundColor(Color.parseColor("#2196F3")) // Blue for no goal
+            }
+            progressFrame.addView(progressView)
+        }
+
+        val statusText = TextView(this).apply {
+            text = if (goalData != null) {
+                when {
+                    actualAmount <= goalData.minGoal -> "✓ Under minimum goal"
+                    actualAmount <= goalData.maxGoal -> "⚠️ Within budget range"
+                    else -> "❌ Over budget"
+                }
+            } else {
+                "No goal set"
+            }
+            setTextColor(
+                if (goalData != null) {
+                    when {
+                        actualAmount <= goalData.minGoal -> Color.parseColor("#4CAF50")
+                        actualAmount <= goalData.maxGoal -> Color.parseColor("#FF9800")
+                        else -> Color.parseColor("#FF5722")
+                    }
+                } else {
+                    Color.parseColor("#666666")
+                }
+            )
             textSize = 12f
             setTypeface(null, android.graphics.Typeface.BOLD)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                setMargins(0, 0, 0, 8)
-            }
-        }
-
-        // Chart container
-        val chartFrame = FrameLayout(this).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                48
-            )
-        }
-
-        // Calculate maximum for chart scaling
-        val maxAmount = if (goalData != null) {
-            maxOf(actualAmount, goalData.maxGoal, goalData.minGoal)
-        } else {
-            actualAmount
-        }
-
-        val maxWidth = resources.displayMetrics.widthPixels - (64 * resources.displayMetrics.density).toInt()
-
-        // Create goal range background if goals exist
-        if (goalData != null) {
-            val minGoalWidth = ((goalData.minGoal / maxAmount) * maxWidth * 0.8).toInt()
-            val maxGoalWidth = ((goalData.maxGoal / maxAmount) * maxWidth * 0.8).toInt()
-
-            // Min goal bar (light green background)
-            val minGoalBar = View(this).apply {
-                layoutParams = FrameLayout.LayoutParams(minGoalWidth, FrameLayout.LayoutParams.MATCH_PARENT)
-                setBackgroundColor(Color.parseColor("#90EE90")) // Light green
-                alpha = 0.3f
-            }
-
-            // Max goal bar (yellow background)
-            val maxGoalBar = View(this).apply {
-                layoutParams = FrameLayout.LayoutParams(maxGoalWidth, FrameLayout.LayoutParams.MATCH_PARENT)
-                setBackgroundColor(Color.parseColor("#FFFF99")) // Light yellow
-                alpha = 0.3f
-            }
-
-            chartFrame.addView(minGoalBar)
-            chartFrame.addView(maxGoalBar)
-        }
-
-        // Actual amount bar
-        val actualWidth = ((actualAmount / maxAmount) * maxWidth * 0.8).toInt()
-        val actualBar = View(this).apply {
-            layoutParams = FrameLayout.LayoutParams(actualWidth, FrameLayout.LayoutParams.MATCH_PARENT)
-            setBackgroundColor(
-                if (goalData != null) {
-                    when {
-                        actualAmount > goalData.maxGoal -> Color.parseColor("#FF6B6B") // Red for over max
-                        actualAmount > goalData.minGoal -> Color.parseColor("#FFA500") // Orange for within range
-                        else -> Color.parseColor("#4CAF50") // Green for under min
-                    }
-                } else {
-                    Color.parseColor("#4CAF50") // Default green
-                }
-            )
-        }
-
-        chartFrame.addView(actualBar)
-
-        // Amount labels
-        val amountLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
                 setMargins(0, 8, 0, 0)
             }
         }
 
-        val actualAmountText = TextView(this).apply {
-            text = "Actual: R${String.format("%.2f", actualAmount)}"
-            setTextColor(Color.parseColor("#CCCCCC"))
-            textSize = 10f
-        }
+        categoryLayout.addView(headerLayout)
+        categoryLayout.addView(progressFrame)
+        categoryLayout.addView(statusText)
 
-        amountLayout.addView(actualAmountText)
-
-        if (goalData != null) {
-            val goalRangeText = TextView(this).apply {
-                text = "Goal Range: R${String.format("%.2f", goalData.minGoal)} - R${String.format("%.2f", goalData.maxGoal)}"
-                setTextColor(Color.parseColor("#CCCCCC"))
-                textSize = 10f
-            }
-            amountLayout.addView(goalRangeText)
-        }
-
-        categoryLayout.addView(titleTextView)
-        categoryLayout.addView(chartFrame)
-        categoryLayout.addView(amountLayout)
-
-        chartContainer.addView(categoryLayout)
+        val categoriesContainer = findViewById<LinearLayout>(R.id.categoriesContainer)
+        categoriesContainer.addView(categoryLayout)
     }
+
 
     private fun showNoDataMessage() {
         val messageLayout = LinearLayout(this).apply {
@@ -828,6 +879,10 @@ class DashboardActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun Int.dpToPx(): Int {
+        return (this * resources.displayMetrics.density).toInt()
     }
 
     override fun onResume() {

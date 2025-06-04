@@ -70,6 +70,8 @@ class MainActivity : AppCompatActivity() {
                     if (task.isSuccessful) {
                         Toast.makeText(this, "Login successful", Toast.LENGTH_SHORT).show()
                         goToDashboard()
+                        Log.e("LoginError", "login successful")
+
                     } else {
                         val exception = task.exception
                         val errorMessage = when (exception) {

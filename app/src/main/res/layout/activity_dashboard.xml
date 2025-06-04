@@ -2,7 +2,7 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#1B4332"
+    android:background="#2E4A3A"
     android:fillViewport="true"
     android:clipToPadding="false"
     android:paddingBottom="24dp"
@@ -14,447 +14,591 @@
         android:orientation="vertical"
         android:paddingBottom="48dp">
 
-        <!-- Header with Logo and Menu -->
+        <!-- Header Section with Logo -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:padding="20dp"
+            android:padding="24dp"
             android:gravity="center_vertical"
-            android:elevation="4dp"
-            android:background="#2D5A3D">
+            android:elevation="2dp"
+            android:background="#3A5A4A">
 
             <!-- Logo -->
             <ImageView
-                android:layout_width="70dp"
-                android:layout_height="70dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:src="@drawable/logo"
+                android:layout_marginEnd="16dp"
+                android:contentDescription="Smart Spend Logo"
                 android:scaleType="centerCrop" />
 
-            <View
-                android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="1" />
-
-            <!-- Menu icon with better touch target -->
+            <!-- App Title -->
             <LinearLayout
-                android:id="@+id/menuIcon"
-                android:layout_width="56dp"
-                android:layout_height="56dp"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="SMART SPEND"
+                    android:textColor="#FFFFFF"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.1" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Budget Tracker"
+                    android:textColor="#CCCCCC"
+                    android:textSize="12sp"
+                    android:layout_marginTop="2dp" />
+            </LinearLayout>
+
+            <!-- Menu Button -->
+            <LinearLayout
+                android:id="@+id/menuButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
                 android:orientation="vertical"
                 android:clickable="true"
                 android:focusable="true"
                 android:gravity="center"
-                android:padding="16dp"
-                android:contentDescription="Open menu"
-                android:background="?android:attr/selectableItemBackgroundBorderless">
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Menu">
 
                 <View
                     android:layout_width="20dp"
                     android:layout_height="2dp"
-                    android:background="@android:color/white"
+                    android:background="#FFFFFF"
                     android:layout_marginBottom="3dp" />
                 <View
                     android:layout_width="20dp"
                     android:layout_height="2dp"
-                    android:background="@android:color/white"
+                    android:background="#FFFFFF"
                     android:layout_marginBottom="3dp" />
                 <View
                     android:layout_width="20dp"
                     android:layout_height="2dp"
-                    android:background="@android:color/white" />
+                    android:background="#FFFFFF" />
             </LinearLayout>
 
         </LinearLayout>
 
-        <!-- Dashboard Title with bigger fonts and better spacing -->
+        <!-- Dashboard Overview -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="32dp"
-            android:paddingBottom="24dp"
-            android:gravity="center">
+            android:padding="24dp"
+            android:background="@drawable/rounded_button"
+            android:layout_margin="16dp"
+            android:elevation="2dp">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Personal Dashboard"
-                android:textColor="@android:color/white"
-                android:textSize="42sp"
+                android:text="MONTHLY BUDGET OVERVIEW"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
                 android:textStyle="bold"
-                android:layout_marginBottom="12dp"
-                android:gravity="center"
-                android:textAlignment="center" />
+                android:letterSpacing="0.1"
+                android:layout_marginBottom="8dp" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Track your monthly budget progress"
-                android:textColor="#B8D4C6"
-                android:textSize="18sp"
-                android:alpha="0.8"
-                android:gravity="center"
-                android:textAlignment="center" />
+                android:text="Track your spending across different categories"
+                android:textColor="#CCCCCC"
+                android:textSize="12sp"
+                android:layout_marginBottom="24dp" />
 
-        </LinearLayout>
-
-        <!-- Legend with improved design and proper spacing -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginHorizontal="20dp"
-            android:layout_marginBottom="32dp"
-            android:background="#2D5A3D"
-            android:padding="20dp"
-            android:gravity="center"
-            android:weightSum="3">
-
+            <!-- Legend -->
             <LinearLayout
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:orientation="horizontal"
+                android:layout_marginBottom="24dp"
                 android:gravity="center"
-                android:paddingHorizontal="8dp">
-                <View
-                    android:layout_width="16dp"
-                    android:layout_height="16dp"
-                    android:background="#FF6B6B"
-                    android:layout_marginEnd="8dp"
-                    android:layout_gravity="center_vertical" />
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Over"
-                    android:textColor="@android:color/white"
-                    android:textSize="13sp"
-                    android:textStyle="bold"
-                    android:maxLines="1"
-                    android:ellipsize="none" />
-            </LinearLayout>
+                android:weightSum="3">
 
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="horizontal"
-                android:gravity="center"
-                android:paddingHorizontal="8dp">
-                <View
-                    android:layout_width="16dp"
-                    android:layout_height="16dp"
-                    android:background="#4CAF50"
-                    android:layout_marginEnd="8dp"
-                    android:layout_gravity="center_vertical" />
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="Budget"
-                    android:textColor="@android:color/white"
-                    android:textSize="13sp"
-                    android:textStyle="bold"
-                    android:maxLines="1" />
-            </LinearLayout>
+                    android:layout_weight="1"
+                    android:orientation="horizontal"
+                    android:gravity="center">
+                    <View
+                        android:layout_width="12dp"
+                        android:layout_height="12dp"
+                        android:background="#4A6A5A"
+                        android:layout_marginEnd="8dp" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Budget"
+                        android:textColor="#CCCCCC"
+                        android:textSize="10sp" />
+                </LinearLayout>
 
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:orientation="horizontal"
-                android:gravity="center"
-                android:paddingHorizontal="8dp">
-                <View
-                    android:layout_width="16dp"
-                    android:layout_height="16dp"
-                    android:background="#2E7D32"
-                    android:layout_marginEnd="8dp"
-                    android:layout_gravity="center_vertical" />
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="Actual"
-                    android:textColor="@android:color/white"
-                    android:textSize="13sp"
-                    android:textStyle="bold"
-                    android:maxLines="1" />
+                    android:layout_weight="1"
+                    android:orientation="horizontal"
+                    android:gravity="center">
+                    <View
+                        android:layout_width="12dp"
+                        android:layout_height="12dp"
+                        android:background="#66BB6A"
+                        android:layout_marginEnd="8dp" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Spent"
+                        android:textColor="#CCCCCC"
+                        android:textSize="10sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="horizontal"
+                    android:gravity="center">
+                    <View
+                        android:layout_width="12dp"
+                        android:layout_height="12dp"
+                        android:background="#FF7043"
+                        android:layout_marginEnd="8dp" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Over Budget"
+                        android:textColor="#CCCCCC"
+                        android:textSize="10sp" />
+                </LinearLayout>
+
             </LinearLayout>
 
         </LinearLayout>
 
-        <!-- Budget Chart Section with properly centered charts -->
+        <!-- Budget Categories -->
         <LinearLayout
-            android:id="@+id/chartContainer"
+            android:id="@+id/categoriesContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:layout_marginHorizontal="20dp"
-            android:layout_marginBottom="40dp">
+            android:layout_marginHorizontal="16dp">
 
-            <!-- LIGHTS -->
+            <!-- Utilities Category -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginBottom="24dp"
-                android:background="#2D5A3D"
-                android:padding="24dp">
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/rounded_button"
+                android:padding="24dp"
+                android:elevation="1dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?android:attr/selectableItemBackground">
 
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="💡 LIGHTS"
-                    android:textColor="@android:color/white"
-                    android:textSize="20sp"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="16dp"
-                    android:layout_gravity="center_horizontal" />
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="16dp">
 
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="⚡ UTILITIES"
+                        android:textColor="#FFFFFF"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.1" />
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:gravity="end">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="$120 / $150"
+                            android:textColor="#FFFFFF"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="$30 remaining"
+                            android:textColor="#66BB6A"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+
+                </LinearLayout>
+
+                <!-- Progress Bar -->
                 <FrameLayout
-                    android:layout_width="300dp"
-                    android:layout_height="40dp"
-                    android:layout_gravity="center_horizontal">
+                    android:layout_width="match_parent"
+                    android:layout_height="8dp"
+                    android:background="#4A6A5A">
 
-                    <!-- Budget Bar (background) -->
                     <View
-                        android:id="@+id/lightsActualBar"
-                        android:layout_width="150dp"
+                        android:layout_width="0dp"
                         android:layout_height="match_parent"
-                        android:background="#4CAF50" />
-
-                    <!-- Actual Bar (foreground) -->
-                    <View
-                        android:id="@+id/lightsBudgetBar"
-                        android:layout_width="120dp"
-                        android:layout_height="match_parent"
-                        android:background="#2E7D32" />
+                        android:layout_weight="0.8"
+                        android:background="#66BB6A" />
 
                 </FrameLayout>
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Under budget ✓"
-                    android:textColor="#81C784"
-                    android:textSize="14sp"
+                    android:text="✓ Under budget"
+                    android:textColor="#66BB6A"
+                    android:textSize="10sp"
                     android:textStyle="bold"
-                    android:layout_marginTop="12dp"
-                    android:layout_gravity="center_horizontal" />
+                    android:layout_marginTop="8dp" />
 
             </LinearLayout>
 
-            <!-- CLOTHES -->
+            <!-- Clothing Category -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginBottom="24dp"
-                android:background="#2D5A3D"
-                android:padding="24dp">
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/rounded_button"
+                android:padding="24dp"
+                android:elevation="1dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?android:attr/selectableItemBackground">
 
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="👕 CLOTHES"
-                    android:textColor="@android:color/white"
-                    android:textSize="20sp"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="16dp"
-                    android:layout_gravity="center_horizontal" />
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="16dp">
 
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="👕 CLOTHING"
+                        android:textColor="#FFFFFF"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.1" />
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:gravity="end">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="$160 / $180"
+                            android:textColor="#FFFFFF"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="$20 remaining"
+                            android:textColor="#66BB6A"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+
+                </LinearLayout>
+
+                <!-- Progress Bar -->
                 <FrameLayout
-                    android:layout_width="300dp"
-                    android:layout_height="40dp"
-                    android:layout_gravity="center_horizontal">
+                    android:layout_width="match_parent"
+                    android:layout_height="8dp"
+                    android:background="#4A6A5A">
 
                     <View
-                        android:id="@+id/clothesActualBar"
-                        android:layout_width="180dp"
+                        android:layout_width="0dp"
                         android:layout_height="match_parent"
-                        android:background="#4CAF50" />
-
-                    <View
-                        android:id="@+id/clothesBudgetBar"
-                        android:layout_width="160dp"
-                        android:layout_height="match_parent"
-                        android:background="#2E7D32" />
+                        android:layout_weight="0.89"
+                        android:background="#66BB6A" />
 
                 </FrameLayout>
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Under budget ✓"
-                    android:textColor="#81C784"
-                    android:textSize="14sp"
+                    android:text="✓ Under budget"
+                    android:textColor="#66BB6A"
+                    android:textSize="10sp"
                     android:textStyle="bold"
-                    android:layout_marginTop="12dp"
-                    android:layout_gravity="center_horizontal" />
+                    android:layout_marginTop="8dp" />
 
             </LinearLayout>
 
-            <!-- CAR -->
+            <!-- Transportation Category -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginBottom="24dp"
-                android:background="#2D5A3D"
-                android:padding="24dp">
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/rounded_button"
+                android:padding="24dp"
+                android:elevation="1dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?android:attr/selectableItemBackground">
 
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="🚗 CAR"
-                    android:textColor="@android:color/white"
-                    android:textSize="20sp"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="16dp"
-                    android:layout_gravity="center_horizontal" />
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="16dp">
 
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="🚗 TRANSPORTATION"
+                        android:textColor="#FFFFFF"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.1" />
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:gravity="end">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="$240 / $200"
+                            android:textColor="#FFFFFF"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="$40 over budget"
+                            android:textColor="#FF7043"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+
+                </LinearLayout>
+
+                <!-- Progress Bar with Overspend -->
                 <FrameLayout
-                    android:layout_width="300dp"
-                    android:layout_height="40dp"
-                    android:layout_gravity="center_horizontal">
+                    android:layout_width="match_parent"
+                    android:layout_height="8dp"
+                    android:background="#4A6A5A">
 
                     <View
-                        android:id="@+id/carActualBar"
-                        android:layout_width="200dp"
+                        android:layout_width="match_parent"
                         android:layout_height="match_parent"
-                        android:background="#4CAF50" />
+                        android:background="#66BB6A" />
 
                     <View
-                        android:id="@+id/carBudgetBar"
-                        android:layout_width="240dp"
+                        android:layout_width="0dp"
                         android:layout_height="match_parent"
-                        android:background="#2E7D32" />
-
-                    <!-- Overspend indicator -->
-                    <View
-                        android:id="@+id/carOverspendBar"
-                        android:layout_width="40dp"
-                        android:layout_height="match_parent"
-                        android:layout_marginStart="200dp"
-                        android:background="#FF6B6B" />
+                        android:layout_weight="0.2"
+                        android:layout_gravity="end"
+                        android:background="#FF7043" />
 
                 </FrameLayout>
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Over budget ⚠️"
-                    android:textColor="#FF8A80"
-                    android:textSize="14sp"
+                    android:text="⚠ Over budget"
+                    android:textColor="#FF7043"
+                    android:textSize="10sp"
                     android:textStyle="bold"
-                    android:layout_marginTop="12dp"
-                    android:layout_gravity="center_horizontal" />
+                    android:layout_marginTop="8dp" />
 
             </LinearLayout>
 
-            <!-- TOILETRIES -->
+            <!-- Personal Care Category -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:layout_marginBottom="24dp"
-                android:background="#2D5A3D"
-                android:padding="24dp">
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/rounded_button"
+                android:padding="24dp"
+                android:elevation="1dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?android:attr/selectableItemBackground">
 
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="🧴 TOILETRIES"
-                    android:textColor="@android:color/white"
-                    android:textSize="20sp"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="16dp"
-                    android:layout_gravity="center_horizontal" />
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="16dp">
 
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="🧴 PERSONAL CARE"
+                        android:textColor="#FFFFFF"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.1" />
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:gravity="end">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="$75 / $100"
+                            android:textColor="#FFFFFF"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="$25 remaining"
+                            android:textColor="#66BB6A"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+
+                </LinearLayout>
+
+                <!-- Progress Bar -->
                 <FrameLayout
-                    android:layout_width="300dp"
-                    android:layout_height="40dp"
-                    android:layout_gravity="center_horizontal">
+                    android:layout_width="match_parent"
+                    android:layout_height="8dp"
+                    android:background="#4A6A5A">
 
                     <View
-                        android:id="@+id/toiletriesActualBar"
-                        android:layout_width="200dp"
+                        android:layout_width="0dp"
                         android:layout_height="match_parent"
-                        android:background="#4CAF50" />
-
-                    <View
-                        android:id="@+id/toiletriesBudgetBar"
-                        android:layout_width="120dp"
-                        android:layout_height="match_parent"
-                        android:background="#2E7D32" />
+                        android:layout_weight="0.75"
+                        android:background="#66BB6A" />
 
                 </FrameLayout>
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Under budget ✓"
-                    android:textColor="#81C784"
-                    android:textSize="14sp"
+                    android:text="✓ Under budget"
+                    android:textColor="#66BB6A"
+                    android:textSize="10sp"
                     android:textStyle="bold"
-                    android:layout_marginTop="12dp"
-                    android:layout_gravity="center_horizontal" />
+                    android:layout_marginTop="8dp" />
 
             </LinearLayout>
 
         </LinearLayout>
 
-        <!-- Controls Section with improved design and bigger fonts -->
+        <!-- Controls Section -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:layout_marginHorizontal="20dp"
-            android:layout_marginBottom="32dp"
-            android:background="#2D5A3D"
-            android:padding="28dp">
+            android:layout_margin="16dp"
+            android:background="@drawable/rounded_button"
+            android:padding="24dp"
+            android:elevation="2dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="SETTINGS"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.1"
+                android:layout_marginBottom="16dp" />
 
             <!-- Month Selection -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="SELECT MONTH"
-                android:textColor="@android:color/white"
-                android:textSize="18sp"
+                android:textColor="#CCCCCC"
+                android:textSize="12sp"
                 android:textStyle="bold"
-                android:layout_marginBottom="16dp"
-                android:layout_gravity="center_horizontal" />
+                android:letterSpacing="0.1"
+                android:layout_marginBottom="8dp" />
 
             <Spinner
                 android:id="@+id/monthSpinner"
                 android:layout_width="match_parent"
-                android:layout_height="64dp"
-                android:layout_marginBottom="28dp"
-                android:background="@drawable/spinner_background"
-                android:padding="20dp"
-                android:elevation="2dp" />
+                android:layout_height="48dp"
+                android:layout_marginBottom="24dp"
+                android:background="@drawable/rounded_input"
+                android:padding="16dp" />
 
-            <!-- Set Goal Button with better styling -->
-            <Button
-                android:id="@+id/setGoalButton"
+            <!-- Action Buttons -->
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="72dp"
-                android:text="🎯 SET NEW GOAL"
-                android:textColor="@android:color/white"
-                android:textStyle="bold"
-                android:textSize="20sp"
-                android:background="@drawable/button_background"
-                android:elevation="4dp"
-                android:layout_marginBottom="20dp" />
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:weightSum="2">
 
-            <!-- Additional helpful text -->
+                <Button
+                    android:id="@+id/setGoalButton"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="8dp"
+                    android:text="SET GOALS"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold"
+                    android:textSize="12sp"
+                    android:letterSpacing="0.1"
+                    android:background="@drawable/rounded_button"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+                <Button
+                    android:id="@+id/addExpenseButton"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:text="ADD EXPENSE"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold"
+                    android:textSize="12sp"
+                    android:letterSpacing="0.1"
+                    android:background="@drawable/rounded_input"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+            </LinearLayout>
+
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Tap any category above to view detailed spending"
-                android:textColor="#B8D4C6"
-                android:textSize="16sp"
-                android:alpha="0.7"
+                android:text="Tap any category to view detailed spending history"
+                android:textColor="#AAAAAA"
+                android:textSize="10sp"
+                android:layout_marginTop="16dp"
                 android:layout_gravity="center_horizontal"
                 android:textAlignment="center" />
 
